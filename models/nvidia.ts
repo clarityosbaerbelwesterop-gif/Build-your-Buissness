@@ -30,10 +30,21 @@ interface Modell {
   readonly zugang: ZugangsName;
 }
 
+/**
+ * Die Kennung ist `<herausgeber>/<modell>` — und der Herausgeber ist **nicht**
+ * immer `nvidia`. NVIDIA betreibt den Endpunkt, die Modelle stammen von
+ * verschiedenen Häusern.
+ *
+ * Ich hatte hier zunächst überall `nvidia/` stehen, abgeleitet aus dem ersten
+ * Modell. Der Rauchtest hat zwei davon als nicht vorhanden gemeldet, und das
+ * Verzeichnis des Anbieters hat die richtigen Namen geliefert. Wer eine
+ * Kennung ändert, prüft sie mit `npm run rauchtest` nach — geraten wird sie
+ * nicht noch einmal.
+ */
 export const MODELLE: readonly Modell[] = [
   { rolle: "schwer", kennung: "nvidia/nemotron-3-ultra-550b-a55b", zugang: "nvApiKey1" },
-  { rolle: "mittel", kennung: "nvidia/laguna-xs-2.1", zugang: "nvApiKey2" },
-  { rolle: "schnell", kennung: "nvidia/step-3.7-flash", zugang: "nvApiKey3" },
+  { rolle: "mittel", kennung: "poolside/laguna-xs-2.1", zugang: "nvApiKey2" },
+  { rolle: "schnell", kennung: "stepfun-ai/step-3.7-flash", zugang: "nvApiKey3" },
 ];
 
 const NACH_ROLLE = new Map(MODELLE.map((m) => [m.rolle, m]));

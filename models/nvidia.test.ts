@@ -42,9 +42,12 @@ describe("Die Zuordnung Rolle → Modell", () => {
   });
 
   it("bildet die Rollen auf die vereinbarten Modelle ab", () => {
-    expect(modellFuer("schwer").kennung).toContain("nemotron-3-ultra-550b");
-    expect(modellFuer("mittel").kennung).toContain("laguna-xs-2.1");
-    expect(modellFuer("schnell").kennung).toContain("step-3.7-flash");
+    // Ganze Kennung, nicht nur der Modellname: der Herausgeber davor war der
+    // Fehler, den der Rauchtest gefunden hat, und ein toContain auf dem
+    // Modellnamen wäre auch mit dem falschen Präfix grün gewesen.
+    expect(modellFuer("schwer").kennung).toBe("nvidia/nemotron-3-ultra-550b-a55b");
+    expect(modellFuer("mittel").kennung).toBe("poolside/laguna-xs-2.1");
+    expect(modellFuer("schnell").kennung).toBe("stepfun-ai/step-3.7-flash");
   });
 
   it("sagt, ob eine Rolle verfügbar ist, ohne den Schlüssel zu lesen", () => {

@@ -48,6 +48,31 @@ Behoben: er läuft jetzt bei jedem Push und prüft zusätzlich den ganzen Baum a
 eine vorhandene `.env` — Muster können sich ändern, eine `.env` im Repo ist
 immer falsch.
 
+## Rauchtest: zwei Kennungen waren falsch, nicht zwei Schlüssel
+
+Der erste Lauf auf `main` meldete zwei von drei Modellen als nicht vorhanden.
+Nicht die Schlüssel waren das Problem, sondern der **Herausgeber vor dem
+Schrägstrich**: ich hatte überall `nvidia/` geschrieben, abgeleitet aus dem
+ersten Modell. NVIDIA betreibt aber nur den Endpunkt — die Modelle stammen von
+verschiedenen Häusern.
+
+| Rolle | vorher | richtig |
+|---|---|---|
+| schwer | `nvidia/nemotron-3-ultra-550b-a55b` | unverändert, antwortet |
+| mittel | ~~`nvidia/laguna-xs-2.1`~~ | `poolside/laguna-xs-2.1` |
+| schnell | ~~`nvidia/step-3.7-flash`~~ | `stepfun-ai/step-3.7-flash` |
+
+Gefunden hat es der Rauchtest selbst: bei einem Fehlschlag fragt er seit
+diesem Lauf das Verzeichnis des Anbieters ab und legt die ähnlichsten
+vorhandenen Kennungen daneben. Beide richtigen Namen standen an erster Stelle.
+
+**Nebenbei bewiesen: alle drei Schlüssel gelten.** Das Verzeichnis ließ sich
+mit Schlüssel 2 und 3 abrufen — mit einem ungültigen Schlüssel wäre auch das
+abgelehnt worden. Der 404 vorher hatte über die Schlüssel nichts ausgesagt.
+
+Der Beleg steht im Protokoll des Laufs, nicht in diesem Absatz: `Actions → CI`,
+Schritt „Rauchtest der Modelle".
+
 ## Offene Fragen
 
 ### 1. Sandbox-Laufzeit (blockiert M1)
@@ -106,9 +131,9 @@ Rot färbt er den Lauf nicht, denn in M0 braucht kein Schritt einen Zugang.
 
 | Secret | Wofür | Geheim |
 |---|---|---|
-| `NV_API_KEY_1` | nemotron-3-ultra-550b-a55b (Rolle **schwer**) | ja |
-| `NV_API_KEY_2` | laguna-xs-2.1 (Rolle **mittel**) | ja |
-| `NV_API_KEY_3` | step-3.7-flash (Rolle **schnell**) | ja |
+| `NV_API_KEY_1` | nvidia/nemotron-3-ultra-550b-a55b (Rolle **schwer**) | ja |
+| `NV_API_KEY_2` | poolside/laguna-xs-2.1 (Rolle **mittel**) | ja |
+| `NV_API_KEY_3` | stepfun-ai/step-3.7-flash (Rolle **schnell**) | ja |
 | `NVIDIA_BASE_URL` | Endpunkt; ohne Angabe `https://integrate.api.nvidia.com/v1` | nein |
 | `NEON_API_KEY` | Neon-Projekt lesen und Migration anwenden | ja |
 | `NEON_PROJECT_ID` | Nur nötig, wenn im Konto mehr als ein Projekt liegt | nein |
