@@ -13,6 +13,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { Client } from "pg";
+
 import { zugang } from "../config/zugaenge.js";
 import { entschaerfen, projektAusAbsage } from "./entschaerfen.js";
 
@@ -157,6 +159,43 @@ const schluessel = zugang("neonApiKey");
 const projekt = await projektWaehlen(schluessel);
 console.error(`Projekt: ${projekt.name} (${projekt.id})`);
 
+/**
+ * Die Verbindungszeichenfolge fuer dieses Projekt.
+ *
+ * Bevorzugt `DATABASE_URL` aus den Secrets. Fehlt sie, wird sie ueber die
+ * Neon-API geholt — der Schluessel, der das Projekt kennt, darf auch dessen
+ * Verbindung nennen. Das erspart ein zweites Secret fuer dieselbe Sache.
+ *
+ * Sie wird **nie** ausgegeben. Eine Verbindungszeichenfolge traegt das
+ * Passwort der Datenbank im Klartext; ein CI-Protokoll liest jeder mit
+ * Repo-Zugriff.
+ */
+async function verbindung(projektId: string): Promise<string> {
+  const ausSecret = process.env["DATABASE_URL"]?.trim();
+  if (ausSecret !== undefined && ausSecret.length > 0) {
+    console.error("Verbindung: aus DATABASE_URL.");
+    return ausSecret;
+  }
+
+  const datenbank = process.env["NEON_DATABASE"]?.trim() ?? "neondb";
+  const rolle = process.env["NEON_ROLE"]?.trim() ?? "neondb_owner";
+  const daten = await neon(
+    `/projects/${projektId}/connection_uri`
+    + `?database_name=${encodeURIComponent(datenbank)}`
+    + `&role_name=${encodeURIComponent(rolle)}`,
+    schluessel,
+  ) as { uri?: unknown };
+
+  if (typeof daten.uri !== "string" || daten.uri.length === 0) {
+    throw new Error(
+      "Neon hat keine Verbindungszeichenfolge geliefert. "
+      + "Dann muss DATABASE_URL als Secret hinterlegt werden.",
+    );
+  }
+  console.error(`Verbindung: über die Neon-API geholt (${datenbank}, Rolle ${rolle}).`);
+  return daten.uri;
+}
+
 const sql = readFileSync(
   fileURLToPath(new URL("./001_grundschema.sql", import.meta.url)),
   "utf8",
@@ -168,65 +207,40 @@ if (nurLesen) {
   process.exit(0);
 }
 
-/**
- * Der Zweig, auf dem die Migration laufen soll.
- *
- * Neon verlangt bei einer Abfrage genau eines von `endpoint_id` oder
- * `branch_id` — ein Projekt kann mehrere Zweige haben, und ohne Angabe waere
- * unklar, welchen man meint. Das ist dieselbe Vorsicht, aus der auch dieses
- * Skript bei mehreren Projekten abbricht.
- *
- * Gewaehlt wird der voreingestellte Zweig. Findet sich keiner, wird nicht
- * geraten: eine Migration auf dem falschen Zweig faellt erst auf, wenn jemand
- * die Tabellen sucht und sie nicht findet.
- */
-async function zweigWaehlen(projektId: string): Promise<{ id: string; name: string }> {
-  const gewuenscht = process.env["NEON_BRANCH_ID"]?.trim();
-  if (gewuenscht !== undefined && gewuenscht.length > 0) {
-    return { id: gewuenscht, name: gewuenscht };
-  }
-  const daten = await neon(`/projects/${projektId}/branches`, schluessel) as {
-    branches?: { id: string; name: string; default?: boolean; primary?: boolean }[];
-  };
-  const zweige = daten.branches ?? [];
-  if (zweige.length === 0) throw new Error("Das Projekt hat keinen Zweig.");
-
-  // `default` ist das heutige Feld, `primary` das aeltere. Beide pruefen ist
-  // billiger, als bei einer Umbenennung stillschweigend den ersten zu nehmen.
-  const vorgabe = zweige.find((z) => z.default === true || z.primary === true);
-  if (vorgabe !== undefined) return vorgabe;
-
-  if (zweige.length === 1) {
-    const einziger = zweige[0];
-    if (einziger !== undefined) return einziger;
-  }
-  const namen = zweige.map((z) => `${z.name} (${z.id})`).join(", ");
-  throw new Error(
-    `Kein voreingestellter Zweig gefunden. Vorhanden: ${namen}. `
-    + "Bitte NEON_BRANCH_ID als Secret setzen — ich rate hier nicht.",
-  );
-}
-
-const zweig = await zweigWaehlen(projekt.id);
-console.error(`Zweig: ${zweig.name} (${zweig.id})`);
-
-await neon(`/projects/${projekt.id}/query`, schluessel, {
-  method: "POST",
-  // Die Feldnamen sind `db_name` und `role_name`, nicht `database`/`role`.
-  // Der erste Anwendungsversuch endete an genau dieser Stelle mit
-  // „invalid: db_name (field required)" — die Anfrage war sonst korrekt, sie
-  // kam beim richtigen Projekt an und wurde nur wegen der Benennung abgelehnt.
-  //
-  // Beide ueberschreibbar: `neondb` und `neondb_owner` sind Neons Vorgaben,
-  // aber wer sein Projekt selbst angelegt hat, kann andere Namen haben. Ein
-  // fester Wert waere hier ein Fehlschlag ohne Ausweg.
-  body: JSON.stringify({
-    query: sql,
-    db_name: process.env["NEON_DATABASE"]?.trim() ?? "neondb",
-    role_name: process.env["NEON_ROLE"]?.trim() ?? "neondb_owner",
-    branch_id: zweig.id,
-  }),
+// Direkte Postgres-Verbindung, nicht ueber die API.
+//
+// Der Weg ueber `/projects/{id}/query` war der naheliegende — er brauchte nur
+// den API-Schluessel und keinen Netzweg zur Datenbank. Er existiert nicht
+// mehr:
+//
+//   HTTP 410 — the /projects/{project_id}/query endpoint has been removed;
+//   migrate to a direct Postgres connection or the Neon serverless driver
+//
+// Ein 410 ist keine Stoerung, die sich mit einem zweiten Versuch erledigt.
+// Der Endpunkt ist weg, und der Anbieter sagt selbst, was stattdessen gilt.
+const klient = new Client({
+  connectionString: await verbindung(projekt.id),
+  // Neon verlangt TLS. Ohne diese Zeile scheitert die Verbindung mit einer
+  // Meldung ueber Zertifikate, die wie ein Netzproblem aussieht.
+  ssl: { rejectUnauthorized: true },
 });
+
+try {
+  await klient.connect();
+  // Die Datei enthaelt `begin;` … `commit;` und geht als **eine** einfache
+  // Anfrage raus. Das ist Absicht: laeuft eine Migration Anweisung fuer
+  // Anweisung, kann sie auf halber Strecke stehen bleiben — etwa mit
+  // angelegter Tabelle, aber ohne Policy. Das ist der Zustand, den niemand
+  // bemerkt, weil alles zu funktionieren scheint.
+  await klient.query(sql);
+} catch (fehler) {
+  // Die Meldung von Postgres nennt Zeile und Grund und ist das Nuetzlichste,
+  // was es hier gibt — aber sie kann Teile der Anfrage enthalten. Derselbe
+  // Filter wie bei den Antworten der Neon-API.
+  throw new Error(`Migration abgebrochen: ${entschaerfen((fehler as Error).message)}`);
+} finally {
+  await klient.end();
+}
 
 console.error("Schema angewendet.");
 console.error("Row Level Security ist auf jeder Tabelle eingeschaltet UND erzwungen.");

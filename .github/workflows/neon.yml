@@ -43,7 +43,7 @@ jobs:
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
           NEON_DATABASE: ${{ secrets.NEON_DATABASE }}
           NEON_ROLE: ${{ secrets.NEON_ROLE }}
-          NEON_BRANCH_ID: ${{ secrets.NEON_BRANCH_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Anwenden
         if: inputs.wirklich == 'anwenden'
@@ -53,4 +53,4 @@ jobs:
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
           NEON_DATABASE: ${{ secrets.NEON_DATABASE }}
           NEON_ROLE: ${{ secrets.NEON_ROLE }}
-          NEON_BRANCH_ID: ${{ secrets.NEON_BRANCH_ID }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
