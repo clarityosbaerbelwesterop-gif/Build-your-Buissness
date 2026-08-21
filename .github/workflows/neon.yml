@@ -1,0 +1,50 @@
+name: Neon
+
+# Die Migration gegen Neon anwenden — **von Hand ausgelöst**, nicht bei jedem
+# Push. Eine Migration, die bei jedem Commit gegen die Datenbank läuft, ist die
+# Sorte Automatik, bei der irgendwann ein `drop` durchrutscht und es niemand
+# vorher gesehen hat.
+#
+# Flo arbeitet nur auf dem iPad (USER.md). Deshalb ist der Auslöser ein Knopf
+# in der GitHub-Oberfläche: Actions → Neon → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      wirklich:
+        description: 'Zum Anwenden "anwenden" eintippen. Alles andere ist ein Trockenlauf.'
+        required: true
+        default: "trocken"
+
+jobs:
+  migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Erst prüfen, dann anwenden. Der Selbsttest setzt die eigenen Angreifer
+      # auf die eigene Migration an — ohne ihn ginge ein Schema raus, das die
+      # Prüfung nicht besteht, die wir Kunden verkaufen.
+      - name: Schema prüfen
+        run: npx vitest run db
+
+      - name: Trockenlauf
+        if: inputs.wirklich != 'anwenden'
+        run: |
+          npm run migrieren:trocken
+          echo "Nichts gesendet. Zum Anwenden den Lauf mit \"anwenden\" starten."
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+
+      - name: Anwenden
+        if: inputs.wirklich == 'anwenden'
+        run: npm run migrieren
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
