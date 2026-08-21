@@ -3,7 +3,10 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["node_modules", "coverage"] },
+  // Die Konfigurationsdatei selbst wird nicht typgeprueft — sie liegt nicht im
+  // tsconfig-Programm, und sie dort aufzunehmen hiesse, den Uebersetzer auf
+  // eine Datei zu richten, die er nie ausliefert.
+  { ignores: ["node_modules", "coverage", "eslint.config.js"] },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
@@ -18,6 +21,13 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/consistent-type-imports": "error",
       "no-console": ["error", { allow: ["error"] }],
+      // Ein mit _ benanntes Ergebnis ist ausdruecklich weggeworfen — das
+      // kommt beim Herausnehmen eines Feldes per Destrukturierung vor.
+      "@typescript-eslint/no-unused-vars": ["error", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+      }],
     },
   },
 );
