@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { entschaerfen, projektAusAbsage } from "./entschaerfen.js";
+import { ausUmgebung, entschaerfen, projektAusAbsage } from "./entschaerfen.js";
 
 describe("entschaerfen", () => {
   it.each([
@@ -81,5 +81,38 @@ describe("projektAusAbsage", () => {
     // `project_id` ist nicht `subject_project_id`. Das falsche Projekt zu
     // migrieren merkt niemand sofort.
     expect(projektAusAbsage('project_id:"fremdes-projekt-99"')).toBeUndefined();
+  });
+});
+
+describe("ausUmgebung", () => {
+  it("gibt einen gesetzten Wert zurück", () => {
+    expect(ausUmgebung("X", { X: "neondb" })).toBe("neondb");
+  });
+
+  it("behandelt eine leere Zeichenkette wie nicht gesetzt", () => {
+    // Der eigentliche Anlass. GitHub Actions setzt ein Secret, das es nicht
+    // gibt, als leeren String — nicht als „fehlt". Damit greift
+    // `?? "vorgabe"` nicht, weil "" nicht nullish ist.
+    expect(ausUmgebung("X", { X: "" })).toBeUndefined();
+  });
+
+  it("behandelt reinen Leerraum wie nicht gesetzt", () => {
+    expect(ausUmgebung("X", { X: "   " })).toBeUndefined();
+  });
+
+  it("gibt undefined zurück, wenn der Name gar nicht vorkommt", () => {
+    expect(ausUmgebung("X", {})).toBeUndefined();
+  });
+
+  it("schneidet Leerraum ab", () => {
+    // Ein Wert aus der Zwischenablage trägt gern ein Zeilenende mit.
+    expect(ausUmgebung("X", { X: " neondb\n" })).toBe("neondb");
+  });
+
+  it("die Vorgabe greift, wenn das Secret leer ist", () => {
+    // Der Test, der den Fehlschlag beschreibt: vorher stand hier "" statt
+    // "neondb", und die Anfrage ging als ?database_name= raus.
+    expect(ausUmgebung("NEON_DATABASE", { NEON_DATABASE: "" }) ?? "neondb")
+      .toBe("neondb");
   });
 });

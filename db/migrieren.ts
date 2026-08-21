@@ -13,8 +13,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { Client } from "pg";
+
 import { zugang } from "../config/zugaenge.js";
-import { entschaerfen, projektAusAbsage } from "./entschaerfen.js";
+import { ausUmgebung, entschaerfen, projektAusAbsage } from "./entschaerfen.js";
 
 const API = "https://console.neon.tech/api/v2";
 
@@ -125,12 +127,12 @@ async function projekteHolen(schluessel: string): Promise<Projekt[]> {
 }
 
 async function projektWaehlen(schluessel: string): Promise<Projekt> {
-  const gewuenscht = process.env["NEON_PROJECT_ID"]?.trim();
+  const gewuenscht = ausUmgebung("NEON_PROJECT_ID");
 
   // Steht die Kennung fest, ist die Liste ueberfluessig — und ein
   // projektgebundener Schluessel darf sie ohnehin nicht abrufen. Die Liste
   // dient dem Finden, nicht dem Arbeiten.
-  if (gewuenscht !== undefined && gewuenscht.length > 0) {
+  if (gewuenscht !== undefined) {
     return { id: gewuenscht, name: gewuenscht };
   }
 
@@ -157,6 +159,43 @@ const schluessel = zugang("neonApiKey");
 const projekt = await projektWaehlen(schluessel);
 console.error(`Projekt: ${projekt.name} (${projekt.id})`);
 
+/**
+ * Die Verbindungszeichenfolge fuer dieses Projekt.
+ *
+ * Bevorzugt `DATABASE_URL` aus den Secrets. Fehlt sie, wird sie ueber die
+ * Neon-API geholt — der Schluessel, der das Projekt kennt, darf auch dessen
+ * Verbindung nennen. Das erspart ein zweites Secret fuer dieselbe Sache.
+ *
+ * Sie wird **nie** ausgegeben. Eine Verbindungszeichenfolge traegt das
+ * Passwort der Datenbank im Klartext; ein CI-Protokoll liest jeder mit
+ * Repo-Zugriff.
+ */
+async function verbindung(projektId: string): Promise<string> {
+  const ausSecret = ausUmgebung("DATABASE_URL");
+  if (ausSecret !== undefined) {
+    console.error("Verbindung: aus DATABASE_URL.");
+    return ausSecret;
+  }
+
+  const datenbank = ausUmgebung("NEON_DATABASE") ?? "neondb";
+  const rolle = ausUmgebung("NEON_ROLE") ?? "neondb_owner";
+  const daten = await neon(
+    `/projects/${projektId}/connection_uri`
+    + `?database_name=${encodeURIComponent(datenbank)}`
+    + `&role_name=${encodeURIComponent(rolle)}`,
+    schluessel,
+  ) as { uri?: unknown };
+
+  if (typeof daten.uri !== "string" || daten.uri.length === 0) {
+    throw new Error(
+      "Neon hat keine Verbindungszeichenfolge geliefert. "
+      + "Dann muss DATABASE_URL als Secret hinterlegt werden.",
+    );
+  }
+  console.error(`Verbindung: über die Neon-API geholt (${datenbank}, Rolle ${rolle}).`);
+  return daten.uri;
+}
+
 const sql = readFileSync(
   fileURLToPath(new URL("./001_grundschema.sql", import.meta.url)),
   "utf8",
@@ -168,10 +207,40 @@ if (nurLesen) {
   process.exit(0);
 }
 
-await neon(`/projects/${projekt.id}/query`, schluessel, {
-  method: "POST",
-  body: JSON.stringify({ query: sql, database: "neondb", role: "neondb_owner" }),
+// Direkte Postgres-Verbindung, nicht ueber die API.
+//
+// Der Weg ueber `/projects/{id}/query` war der naheliegende — er brauchte nur
+// den API-Schluessel und keinen Netzweg zur Datenbank. Er existiert nicht
+// mehr:
+//
+//   HTTP 410 — the /projects/{project_id}/query endpoint has been removed;
+//   migrate to a direct Postgres connection or the Neon serverless driver
+//
+// Ein 410 ist keine Stoerung, die sich mit einem zweiten Versuch erledigt.
+// Der Endpunkt ist weg, und der Anbieter sagt selbst, was stattdessen gilt.
+const klient = new Client({
+  connectionString: await verbindung(projekt.id),
+  // Neon verlangt TLS. Ohne diese Zeile scheitert die Verbindung mit einer
+  // Meldung ueber Zertifikate, die wie ein Netzproblem aussieht.
+  ssl: { rejectUnauthorized: true },
 });
+
+try {
+  await klient.connect();
+  // Die Datei enthaelt `begin;` … `commit;` und geht als **eine** einfache
+  // Anfrage raus. Das ist Absicht: laeuft eine Migration Anweisung fuer
+  // Anweisung, kann sie auf halber Strecke stehen bleiben — etwa mit
+  // angelegter Tabelle, aber ohne Policy. Das ist der Zustand, den niemand
+  // bemerkt, weil alles zu funktionieren scheint.
+  await klient.query(sql);
+} catch (fehler) {
+  // Die Meldung von Postgres nennt Zeile und Grund und ist das Nuetzlichste,
+  // was es hier gibt — aber sie kann Teile der Anfrage enthalten. Derselbe
+  // Filter wie bei den Antworten der Neon-API.
+  throw new Error(`Migration abgebrochen: ${entschaerfen((fehler as Error).message)}`);
+} finally {
+  await klient.end();
+}
 
 console.error("Schema angewendet.");
 console.error("Row Level Security ist auf jeder Tabelle eingeschaltet UND erzwungen.");
