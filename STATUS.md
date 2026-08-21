@@ -48,6 +48,61 @@ Behoben: er läuft jetzt bei jedem Push und prüft zusätzlich den ganzen Baum a
 eine vorhandene `.env` — Muster können sich ändern, eine `.env` im Repo ist
 immer falsch.
 
+## Rauchtest: zwei Kennungen waren falsch, nicht zwei Schlüssel
+
+Der erste Lauf auf `main` meldete zwei von drei Modellen als nicht vorhanden.
+Nicht die Schlüssel waren das Problem, sondern der **Herausgeber vor dem
+Schrägstrich**: ich hatte überall `nvidia/` geschrieben, abgeleitet aus dem
+ersten Modell. NVIDIA betreibt aber nur den Endpunkt — die Modelle stammen von
+verschiedenen Häusern.
+
+| Rolle | vorher | richtig |
+|---|---|---|
+| schwer | `nvidia/nemotron-3-ultra-550b-a55b` | unverändert, antwortet |
+| mittel | ~~`nvidia/laguna-xs-2.1`~~ | `poolside/laguna-xs-2.1` |
+| schnell | ~~`nvidia/step-3.7-flash`~~ | `stepfun-ai/step-3.7-flash` |
+
+Gefunden hat es der Rauchtest selbst: bei einem Fehlschlag fragt er seit
+diesem Lauf das Verzeichnis des Anbieters ab und legt die ähnlichsten
+vorhandenen Kennungen daneben. Beide richtigen Namen standen an erster Stelle.
+
+**Nebenbei bewiesen: alle drei Schlüssel gelten.** Das Verzeichnis ließ sich
+mit Schlüssel 2 und 3 abrufen — mit einem ungültigen Schlüssel wäre auch das
+abgelehnt worden. Der 404 vorher hatte über die Schlüssel nichts ausgesagt.
+
+Der Beleg steht im Protokoll des Laufs, nicht in diesem Absatz: `Actions → CI`,
+Schritt „Rauchtest der Modelle".
+
+### Und dann fiel das Modell aus, das vorher lief
+
+Im selben Lauf, in dem die zwei korrigierten Kennungen zum ersten Mal
+antworteten, gab **`nvidia/nemotron-3-ultra-550b-a55b` ein 503** — dasselbe
+Modell, das sechs Minuten vorher in 1550 ms geantwortet hatte. Nichts an der
+Anfrage war anders; der Anbieter war kurz nicht verfügbar.
+
+Das ist der eigentliche Fund an diesem Lauf. Ohne Wiederholung entscheidet
+eine Sekunde Fremdausfall über einen ganzen Auftrag — bei einem Produkt, das
+„die KI macht es und du schaust zu" verspricht, sieht der Nutzer dann einen
+abgebrochenen Lauf und kann nichts tun.
+
+`fragen()` versucht es jetzt bis zu dreimal, bei 429, 500, 502, 503 und 504.
+**Nicht** bei 400, 401, 403, 404: ein falscher Schlüssel bleibt falsch, und
+einen Modellnamen, den es nicht gibt, erzeugt kein Warten. Die Zeitgrenze gilt
+für den ganzen Vorgang, nicht je Versuch — sonst würden aus 120 s im
+schlechtesten Fall 360 s, und der Kostendeckel der Schleife bucht erst nach
+der Runde.
+
+| Rolle | Kennung | Letzter Stand |
+|---|---|---|
+| schwer | `nvidia/nemotron-3-ultra-550b-a55b` | antwortet (1550 ms); einmal 503 gesehen |
+| mittel | `poolside/laguna-xs-2.1` | antwortet — **32 s**, deutlich langsamer als die anderen |
+| schnell | `stepfun-ai/step-3.7-flash` | antwortet (1735 ms) |
+
+Die 32 Sekunden bei `mittel` sind notiert, nicht erklärt. Ein Wert aus einem
+einzigen Lauf ist keine Messung. Sollte sich das halten, gehört die Rolle
+„mittel" überdacht — sie ist als Alltagsrolle gedacht und wäre damit die
+langsamste von dreien.
+
 ## Offene Fragen
 
 ### 1. Sandbox-Laufzeit (blockiert M1)
@@ -106,9 +161,9 @@ Rot färbt er den Lauf nicht, denn in M0 braucht kein Schritt einen Zugang.
 
 | Secret | Wofür | Geheim |
 |---|---|---|
-| `NV_API_KEY_1` | nemotron-3-ultra-550b-a55b (Rolle **schwer**) | ja |
-| `NV_API_KEY_2` | laguna-xs-2.1 (Rolle **mittel**) | ja |
-| `NV_API_KEY_3` | step-3.7-flash (Rolle **schnell**) | ja |
+| `NV_API_KEY_1` | nvidia/nemotron-3-ultra-550b-a55b (Rolle **schwer**) | ja |
+| `NV_API_KEY_2` | poolside/laguna-xs-2.1 (Rolle **mittel**) | ja |
+| `NV_API_KEY_3` | stepfun-ai/step-3.7-flash (Rolle **schnell**) | ja |
 | `NVIDIA_BASE_URL` | Endpunkt; ohne Angabe `https://integrate.api.nvidia.com/v1` | nein |
 | `NEON_API_KEY` | Neon-Projekt lesen und Migration anwenden | ja |
 | `NEON_PROJECT_ID` | Nur nötig, wenn im Konto mehr als ein Projekt liegt | nein |

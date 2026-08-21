@@ -10,7 +10,8 @@
  * eines CI-Laufs ist für jeden lesbar, der Zugriff auf das Repository hat.
  */
 
-import { MODELLE, fragen, rolleVerfuegbar, type Rolle } from "./nvidia.js";
+import { aehnlichste, katalog } from "./katalog.js";
+import { MODELLE, fragen, modellFuer, rolleVerfuegbar, type Rolle } from "./nvidia.js";
 
 interface Ergebnis {
   readonly rolle: Rolle;
@@ -44,6 +45,23 @@ async function pruefen(rolle: Rolle, kennung: string): Promise<Ergebnis> {
   }
 }
 
+/**
+ * Was unter diesem Schluessel sonst erreichbar ist.
+ *
+ * Nur bei einem Fehlschlag, und nur dann sinnvoll: „gibt es nicht" ist eine
+ * Sackgasse, „gibt es nicht, aber diese fuenf sehen aehnlich aus" ist ein
+ * naechster Schritt. Kostet eine Verzeichnisabfrage, keinen Modelllauf.
+ */
+async function vorschlaege(rolle: Rolle, kennung: string): Promise<string[]> {
+  const alle = await katalog(modellFuer(rolle).zugang);
+  if (alle.length === 0) return [];
+  const nah = aehnlichste(kennung, alle);
+  if (nah.length > 0) return [...nah];
+  // Keine Aehnlichkeit: dann lieber ein Ausschnitt als gar nichts. Die volle
+  // Liste kann Hunderte Zeilen haben und begraebt den eigentlichen Fehler.
+  return [...alle.slice(0, 10), `… und ${alle.length - 10} weitere`];
+}
+
 const ergebnisse = await Promise.all(
   MODELLE.map((m) => pruefen(m.rolle, m.kennung)),
 );
@@ -54,6 +72,19 @@ for (const e of ergebnisse) {
 }
 
 const kaputt = ergebnisse.filter((e) => e.zustand === "fehler");
+
+// Bei jedem Fehlschlag daneben legen, was der Anbieter unter diesem Schluessel
+// wirklich fuehrt. Das ist der Unterschied zwischen einer Fehlermeldung und
+// einer Antwort.
+for (const e of kaputt) {
+  const nah = await vorschlaege(e.rolle, e.kennung);
+  if (nah.length === 0) {
+    console.error(`  ${e.rolle}: kein Verzeichnis abrufbar — Kennung nicht vergleichbar.`);
+    continue;
+  }
+  console.error(`  ${e.rolle}: unter diesem Schluessel erreichbar, aehnlich zu „${e.kennung}":`);
+  for (const k of nah) console.error(`    ${k}`);
+}
 const ohne = ergebnisse.filter((e) => e.zustand === "kein zugang");
 console.error("");
 
