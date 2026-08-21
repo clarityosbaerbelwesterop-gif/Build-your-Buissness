@@ -143,6 +143,38 @@ create policy nur_eigene on bestellungen for all using (user_id = current_user);
     expect(f).toEqual([]);
   });
 
+  it("kennt auch deutsche Mandantenspalten", async () => {
+    // Gefunden durch den Selbsttest in db/schema.test.ts: die erste Fassung
+    // kannte `kunde_id` und `besitzer`, aber nicht `nutzer_id` — und hätte das
+    // eigene Schema von BYB durchgewinkt. Die Kunden, für die BYB baut, sind
+    // deutsch; ihre erzeugten Schemata haben deutsche Spalten.
+    for (const spalte of ["nutzer_id", "konto_id", "mandant_id", "inhaber_id",
+                          "eigentuemer_id"]) {
+      const f = await funde(tabelleOhneRls, {
+        pfad: "m.sql",
+        inhalt: `create table t (id uuid primary key, ${spalte} text not null);`,
+      });
+      expect(f, `${spalte} wurde nicht als Mandantenspalte erkannt`).toHaveLength(1);
+    }
+  });
+
+  it("lässt sich von Formatierung nicht täuschen", async () => {
+    // Der teuerste Fehler, den ein Angreifer machen kann: einen Fehlalarm auf
+    // korrektem Code. Er kostet niemanden Daten, aber er kostet den ganzen
+    // Bericht seine Glaubwürdigkeit. Die erste Fassung prüfte mit `includes`
+    // auf genau ein Leerzeichen und meldete ausgerichtetes SQL als Lücke.
+    const f = await funde(tabelleOhneRls, {
+      pfad: "m.sql",
+      inhalt: `create table bestellungen (id uuid, user_id text not null);
+alter table bestellungen enable row level security;
+alter table bestellungen force  row level security;
+create policy p
+  on bestellungen for all
+  using (user_id = current_user);`,
+    });
+    expect(f).toEqual([]);
+  });
+
   it("meldet eine Tabelle ohne Mandantenbezug nicht", async () => {
     // Eine Preisliste gehört allen. RLS darauf zu verlangen wäre Rauschen.
     const f = await funde(tabelleOhneRls, {

@@ -11,6 +11,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "zugaenge": "tsx config/pruefen.ts",
+    "rauchtest": "tsx models/rauchtest.ts",
+    "migrieren": "tsx db/migrieren.ts",
+    "migrieren:trocken": "tsx db/migrieren.ts --trocken",
     "pruefen": "npm run lint && npm run typecheck && npm run test"
   },
   "dependencies": {

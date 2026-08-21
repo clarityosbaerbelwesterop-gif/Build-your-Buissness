@@ -31,9 +31,16 @@ const SCHEMA_DATEI = /\.(sql)$/i;
  * Ohne so eine Spalte gehört eine Tabelle allen gemeinsam — eine Preisliste
  * braucht kein RLS. Die Liste zu prüfen statt jede Tabelle zu melden ist der
  * Unterschied zwischen einem brauchbaren Prüfbericht und Rauschen.
+ *
+ * **Deutsche Namen gehören dazu.** Die erste Fassung kannte `kunde_id` und
+ * `besitzer`, aber nicht `nutzer_id` — und damit hätte der Angreifer das
+ * eigene Schema von BYB durchgewinkt, in dem jede Tabelle genau so heißt.
+ * Gefunden hat es der Selbsttest in `db/schema.test.ts`, der die Angreifer auf
+ * unsere eigene Migration ansetzt. Kunden, für die BYB baut, sind deutsch;
+ * ihre erzeugten Schemata werden deutsche Spalten haben.
  */
 const MANDANTENSPALTE =
-  /\b(user_id|owner_id|tenant_id|account_id|organisation_id|organization_id|kunde_id|besitzer)\b/i;
+  /\b(user_id|owner_id|tenant_id|account_id|organisation_id|organization_id|customer_id|member_id|workspace_id|nutzer_id|kunde_id|konto_id|mandant_id|inhaber_id|besitzer(_id)?|eigentuemer(_id)?)\b/i;
 
 const CREATE_TABLE = /create\s+table\s+(?:if\s+not\s+exists\s+)?["`]?([a-z_][a-z0-9_]*)["`]?\s*\(/gi;
 
@@ -75,6 +82,20 @@ function tabellenAus(pfad: string, sql: string): Tabelle[] {
   return gefunden;
 }
 
+/**
+ * Steht `alter table <name> <enable|force> row level security` in der Datei?
+ *
+ * Toleriert beliebigen Leerraum zwischen den Woertern, auch Zeilenumbrueche —
+ * SQL wird formatiert, und die Formatierung darf ueber einen Befund nicht
+ * entscheiden.
+ */
+function rlsGesetzt(sql: string, tabelle: string, art: "enable" | "force"): boolean {
+  return new RegExp(
+    `alter\\s+table\\s+["\`]?${tabelle}["\`]?\\s+${art}\\s+row\\s+level\\s+security`,
+    "i",
+  ).test(sql);
+}
+
 export const tabelleOhneRls: Angreifer = {
   klasse: "tabelle-ohne-rls",
   kategorie: "datenzugriff",
@@ -93,8 +114,14 @@ function pruefen(ziel: Ziel): RoherBefund[] {
       if (!MANDANTENSPALTE.test(tabelle.rumpf)) continue;
 
       const n = tabelle.name.toLowerCase();
-      const hatEnable = klein.includes(`alter table ${n} enable row level security`);
-      const hatForce = klein.includes(`alter table ${n} force row level security`);
+      // Muster statt Zeichenkettenvergleich. Die erste Fassung prüfte mit
+      // `includes` auf genau ein Leerzeichen zwischen den Wörtern — und meldete
+      // damit `alter table x force  row level security;` (ausgerichtet, zwei
+      // Leerzeichen) als fehlend. Ein Fehlalarm auf korrektem Code ist der
+      // teuerste Fehler, den ein Angreifer machen kann: er kostet niemanden
+      // Daten, aber er kostet den ganzen Bericht seine Glaubwürdigkeit.
+      const hatEnable = rlsGesetzt(klein, n, "enable");
+      const hatForce = rlsGesetzt(klein, n, "force");
       const hatPolicy = new RegExp(`create\\s+policy\\s+[^;]*\\bon\\s+["\`]?${n}\\b`, "i")
         .test(sql);
       const ort = `${tabelle.pfad}:${tabelle.zeile}  ${tabelle.name}`;

@@ -17,13 +17,13 @@ const GEHEIM = "nvapi-abcdefghijklmnopqrstuvwxyz0123";
 
 describe("Einen Zugang lesen", () => {
   it("liefert den gesetzten Wert", () => {
-    expect(zugang("nvidiaApiKey", { NVIDIA_API_KEY: GEHEIM })).toBe(GEHEIM);
+    expect(zugang("nvApiKey1", { NV_API_KEY_1: GEHEIM })).toBe(GEHEIM);
   });
 
   it("behandelt Leerraum als nicht gesetzt", () => {
     // Ein Secret, das versehentlich als Leerzeile angelegt wurde, ist kein
     // Zugang — es soll denselben klaren Fehler geben wie ein fehlendes.
-    expect(() => zugang("nvidiaApiKey", { NVIDIA_API_KEY: "   " })).toThrow(ZugangFehlt);
+    expect(() => zugang("nvApiKey1", { NV_API_KEY_1: "   " })).toThrow(ZugangFehlt);
   });
 
   it("wirft mit einer Meldung, die sagt was fehlt und wohin es gehört", () => {
@@ -45,18 +45,19 @@ describe("Einen Zugang lesen", () => {
     // Ein eingebauter Standardwert wäre entweder ein echter Schlüssel im
     // Quelltext oder ein Platzhalter, der einen klaren Fehlschlag in einen
     // unverständlichen verwandelt.
-    for (const name of ["nvidiaApiKey", "neonApiKey", "datenbankUrl"] as const) {
+    for (const name of ["nvApiKey1", "nvApiKey2", "nvApiKey3", "neonApiKey",
+                        "datenbankUrl"] as const) {
       expect(() => zugang(name, {})).toThrow(ZugangFehlt);
     }
   });
 
   it("hat einen Vorgabewert für das, was kein Geheimnis ist", () => {
     expect(zugang("nvidiaBaseUrl", {})).toBe("https://integrate.api.nvidia.com/v1");
-    expect(zugang("nvidiaModell", {})).toContain("kimi");
   });
 
   it("lässt den Vorgabewert überschreiben", () => {
-    expect(zugang("nvidiaModell", { NVIDIA_MODEL: "anderes/modell" })).toBe("anderes/modell");
+    expect(zugang("nvidiaBaseUrl", { NVIDIA_BASE_URL: "https://anderer.host/v1" }))
+      .toBe("https://anderer.host/v1");
   });
 });
 
@@ -65,7 +66,7 @@ describe("Nichts verrät einen Wert", () => {
     // Der Fall, der wehtut: der Wert ist da, aber ein anderer fehlt — und die
     // Meldung nimmt beim Aufräumen den ganzen Zusammenhang mit.
     try {
-      zugang("neonApiKey", { NVIDIA_API_KEY: GEHEIM });
+      zugang("neonApiKey", { NV_API_KEY_1: GEHEIM });
       expect.unreachable("hätte werfen müssen");
     } catch (fehler) {
       expect((fehler as Error).message).not.toContain(GEHEIM);
@@ -74,17 +75,17 @@ describe("Nichts verrät einen Wert", () => {
   });
 
   it("gibt in der Übersicht nur Wahrheitswerte aus", () => {
-    const uebersicht = zugangsUebersicht({ NVIDIA_API_KEY: GEHEIM });
+    const uebersicht = zugangsUebersicht({ NV_API_KEY_1: GEHEIM });
     expect(JSON.stringify(uebersicht)).not.toContain(GEHEIM);
-    const nvidia = uebersicht.find((z) => z.name === "NVIDIA_API_KEY");
+    const nvidia = uebersicht.find((z) => z.name === "NV_API_KEY_1");
     expect(nvidia?.gesetzt).toBe(true);
     const neon = uebersicht.find((z) => z.name === "NEON_API_KEY");
     expect(neon?.gesetzt).toBe(false);
   });
 
   it("prüft Vorhandensein, ohne den Wert zu liefern", () => {
-    expect(zugangVorhanden("nvidiaApiKey", { NVIDIA_API_KEY: GEHEIM })).toBe(true);
-    expect(zugangVorhanden("nvidiaApiKey", {})).toBe(false);
+    expect(zugangVorhanden("nvApiKey1", { NV_API_KEY_1: GEHEIM })).toBe(true);
+    expect(zugangVorhanden("nvApiKey1", {})).toBe(false);
   });
 });
 

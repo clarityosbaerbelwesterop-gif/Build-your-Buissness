@@ -1,6 +1,6 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: M0 abgeschlossen. 61 Tests, Lint und Typprüfung grün.
+Stand: M0 abgeschlossen. 108 Tests, Lint und Typprüfung grün.
 
 ## Was steht
 
@@ -11,6 +11,8 @@ Stand: M0 abgeschlossen. 61 Tests, Lint und Typprüfung grün.
 | `core/orchestrator.ts` | Die Schleife: angreifen → fixen → **alles** erneut prüfen. Abbruch bei keine offenen Befunde / Rundenlimit / Kostendeckel. Standard 3 Runden. |
 | `attackers/` | Drei statische Angreifer: Zugangsdaten, RLS, Auth an Route Handlern. |
 | `config/zugaenge.ts` | Eine Stelle, an der Zugänge gelesen werden. Wirft klar, wenn einer fehlt; gibt nie einen Wert in eine Meldung. |
+| `models/nvidia.ts` | Drei Modelle mit getrennten Schlüsseln, angesprochen über eine Rolle (schwer/mittel/schnell). |
+| `db/001_grundschema.sql` | Läufe, Protokolle, Befunde, Runden — jede Tabelle mit RLS enable **und** force **und** Policy. |
 | CI | Drei Läufe: (1) Lint, Typprüfung, Tests, Zugangsübersicht. (2) Keine Zugangsdaten in neuen Zeilen eines PR. (3) Keine Sicherheitszusagen im Text. |
 
 ## Was ein Nutzer davon merkt
@@ -28,14 +30,16 @@ NVIDIA-Schlüssel in einer `.env`:
 - `ff005de` laguna-xs-2.1
 - `da2d9ca` nemotron-3-ultra-550b
 
-**Alle drei sind als kompromittiert zu behandeln.** Das Repository ist zwar
-privat, aber die Schlüssel stehen im Verlauf, in jedem Klon und in jedem
-CI-Protokoll, das die Datei gelesen hat. Sie zu löschen macht sie nicht
-ungültig.
+**Stand: entschärft.** Die Werte, die jetzt in `NV_API_KEY_1/2/3` liegen, sind
+**andere** als die drei aus der `.env` — die im Verlauf stehenden sind nicht in
+Gebrauch.
 
-**Was zu tun ist — und nur der Kontoinhaber kann es:** die drei Schlüssel in
-der NVIDIA-Console widerrufen und neu ausstellen. Die neuen Werte kommen in die
-GitHub Secrets, nicht in eine Datei.
+Was offen bleibt: die drei alten Schlüssel stehen weiterhin im Git-Verlauf, in
+jedem Klon und in jedem CI-Protokoll, das die Datei gelesen hat. Sie zu löschen
+macht sie nicht ungültig. Solange sie bei NVIDIA nicht widerrufen sind, kann
+jeder mit Repo-Zugriff sie benutzen — auf Kosten desselben Kontos. Der Widerruf
+in der NVIDIA-Console ist der einzige Weg, das zu beenden, und nur der
+Kontoinhaber kann ihn auslösen.
 
 **Warum der Wächter nichts gemeldet hat:** `geheimnisse.yml` lief nur bei
 `pull_request`. Die drei Commits gingen direkt auf `main`, also hat er sie nie
@@ -92,18 +96,23 @@ eintragen.
 
 ## Was in den GitHub Secrets liegen muss
 
-**Stand: keines davon ist hinterlegt.** Nachprüfbar mit `npm run zugaenge` —
-der Lauf gibt „gesetzt / nicht gesetzt" aus, nie einen Wert. Er läuft auch in
-der CI mit und färbt den Lauf nicht rot, denn in M0 braucht kein Schritt einen
-Zugang.
+**Stand: `NEON_API_KEY` und `NV_API_KEY_1/2/3` sind hinterlegt** (deine
+Angabe). Nachgeprüft ist es nicht von mir — ich kann Secrets weder lesen noch
+setzen. Was nachprüft, ist `npm run zugaenge`: der Lauf gibt je Zugang
+„gesetzt / nicht gesetzt" aus, nie einen Wert, und läuft in jedem CI-Lauf mit.
+Die Zeile im Protokoll des letzten Laufs ist der Beleg, nicht dieser Absatz.
+
+Rot färbt er den Lauf nicht, denn in M0 braucht kein Schritt einen Zugang.
 
 | Secret | Wofür | Geheim |
 |---|---|---|
-| `NVIDIA_API_KEY` | Zugang zu den Modell-Endpunkten | ja |
+| `NV_API_KEY_1` | nemotron-3-ultra-550b-a55b (Rolle **schwer**) | ja |
+| `NV_API_KEY_2` | laguna-xs-2.1 (Rolle **mittel**) | ja |
+| `NV_API_KEY_3` | step-3.7-flash (Rolle **schnell**) | ja |
 | `NVIDIA_BASE_URL` | Endpunkt; ohne Angabe `https://integrate.api.nvidia.com/v1` | nein |
-| `NVIDIA_MODEL` | Modell; ohne Angabe `moonshotai/kimi-k2-instruct` | nein |
-| `NEON_API_KEY` | Datenbank je Lauf anlegen (Branching, §3) | ja |
-| `DATABASE_URL` | Verbindung zur Datenbank des Backends | ja |
+| `NEON_API_KEY` | Neon-Projekt lesen und Migration anwenden | ja |
+| `NEON_PROJECT_ID` | Nur nötig, wenn im Konto mehr als ein Projekt liegt | nein |
+| `DATABASE_URL` | Verbindung zur Datenbank aus der Anwendung heraus | ja |
 
 Hinterlegt werden sie unter **Settings → Secrets and variables → Actions →
 New repository secret**. Die Namen stehen in `config/zugaenge.ts` und in
@@ -115,6 +124,19 @@ committet — und dann greift §2.4 (Key im Diff = Abbruchgrund), nachdem der
 Schlüssel bereits verbrannt ist.
 
 Später absehbar: `VERCEL_TOKEN` (Control Plane), `STRIPE_SECRET_KEY` (Zahlungen).
+
+## Was jetzt vom iPad aus geht
+
+| Was | Wo |
+|---|---|
+| Prüfen, welche Zugänge liegen | läuft in jedem CI-Lauf mit |
+| Modelle wirklich anfragen | Actions → **CI** → Run workflow |
+| Migration trocken durchspielen | Actions → **Neon** → Run workflow, Eingabe leer lassen |
+| Migration anwenden | Actions → **Neon** → Run workflow, `anwenden` eintippen |
+
+Die Migration läuft **nicht** automatisch bei jedem Push. Eine Migration, die
+bei jedem Commit gegen die Datenbank läuft, ist die Sorte Automatik, bei der
+irgendwann ein `drop` durchrutscht und es niemand vorher gesehen hat.
 
 ## Nächster Schritt
 

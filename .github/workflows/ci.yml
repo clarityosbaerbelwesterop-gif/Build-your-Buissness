@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   pruefen:
@@ -27,6 +28,16 @@ jobs:
       # etwas falsch gemacht hat, wird nach der dritten Meldung ignoriert.
       - name: Zugänge prüfen
         run: npm run zugaenge
+
+      # Antworten die drei Modelle wirklich? Ein Aufruf je Modell mit einem
+      # winzigen Auftrag — der guenstigste Beweis, dass ein Schluessel gilt und
+      # das Modell unter der eingetragenen Kennung erreichbar ist.
+      #
+      # Nur auf main und bei Hand-Auslösung: bei jedem PR waeren das drei
+      # Modellaufrufe je Push, und die kosten.
+      - name: Rauchtest der Modelle
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: npm run rauchtest
     env:
       # Die Modell-Zugaenge werden hier durchgereicht, damit sie an genau einer
       # Stelle stehen. In M0 ruft nichts ein Modell — die Angreifer arbeiten
@@ -34,8 +45,12 @@ jobs:
       # sie, und dann muss niemand die Datei suchen.
       #
       # Was in den GitHub Secrets liegen muss, steht in STATUS.md.
-      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      #
+      # workflow_dispatch, damit der Rauchtest sich vom iPad aus anstoßen
+      # lässt: Actions → CI → Run workflow.
+      NV_API_KEY_1: ${{ secrets.NV_API_KEY_1 }}
+      NV_API_KEY_2: ${{ secrets.NV_API_KEY_2 }}
+      NV_API_KEY_3: ${{ secrets.NV_API_KEY_3 }}
       NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL }}
-      NVIDIA_MODEL: ${{ secrets.NVIDIA_MODEL }}
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}

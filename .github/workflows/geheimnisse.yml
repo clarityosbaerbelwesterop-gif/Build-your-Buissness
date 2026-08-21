@@ -54,18 +54,41 @@ jobs:
           set -euo pipefail
           BASIS="origin/${{ github.base_ref }}"
           git fetch --quiet origin "${{ github.base_ref }}"
-          NEU=$(git diff "$BASIS"...HEAD --unified=0 | grep '^+' | grep -v '^+++' || true)
 
           # Bewusst wenige, praezise Muster. Eine lange Liste vager Ausdruecke
           # erzeugt Fehlalarme, und ein Waechter, dem niemand glaubt, wird
           # uebergangen.
           MUSTER='sk-[A-Za-z0-9]{20,}|nvapi-[A-Za-z0-9_-]{20,}|napi_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|postgres(ql)?://[^:]+:[^@[:space:]]+@'
 
-          if echo "$NEU" | grep -Eq "$MUSTER"; then
-            echo "Zugangsdaten im Diff gefunden:"
-            # Nur Datei und Zeile, nie der Wert — dieses Protokoll ist lesbar.
-            echo "$NEU" | grep -En "$MUSTER" | cut -c1-40 | sed 's/$/…/'
+          # Testdateien und Beispiele sind ausgenommen — dort stehen Attrappen.
+          # Der Angreifer im Produkt (attackers/zugangsdaten.ts, NUR_BEISPIEL)
+          # kennt diese Ausnahme seit dem ersten Tag; dieser Waechter kannte sie
+          # nicht und hat prompt einen Testwert gemeldet. Zwei Pruefungen fuer
+          # dieselbe Frage, von denen eine die Regel kennt und die andere nicht,
+          # sind schlimmer als eine: die strengere gilt am Ende als kaputt.
+          #
+          # Dateiweise statt ueber den ganzen Diff, weil `git diff` den
+          # Dateinamen nur in der +++-Zeile nennt und nicht je Treffer.
+          GEFUNDEN=0
+          while IFS= read -r DATEI; do
+            [ -z "$DATEI" ] && continue
+            case "$DATEI" in
+              *.test.ts|*.test.tsx|*.spec.ts|*.spec.tsx|*.example|*.example.*|*.sample|*.sample.*)
+                continue ;;
+            esac
+            NEU=$(git diff "$BASIS"...HEAD --unified=0 -- "$DATEI" \
+                  | grep '^+' | grep -v '^+++' || true)
+            if echo "$NEU" | grep -Eq "$MUSTER"; then
+              # Nur der Dateiname, nie der Wert — dieses Protokoll ist fuer
+              # jeden lesbar, der Zugriff auf das Repository hat.
+              echo "  $DATEI"
+              GEFUNDEN=1
+            fi
+          done < <(git diff --name-only "$BASIS"...HEAD)
+
+          if [ "$GEFUNDEN" -eq 1 ]; then
             echo
+            echo "Zugangsdaten in den neuen Zeilen der oben genannten Dateien."
             echo "Keys gehoeren in GitHub Secrets, nicht in den Quelltext."
             exit 1
           fi
