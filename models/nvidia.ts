@@ -92,11 +92,69 @@ export function rolleVerfuegbar(
 }
 
 /**
+ * Zustände, bei denen ein zweiter Versuch etwas ändern kann.
+ *
+ * Der Anlass ist gemessen, nicht gedacht: derselbe Rauchtest, der ein Modell
+ * um 10:15 in 1550 ms beantwortet bekam, bekam um 10:21 für dasselbe Modell
+ * ein **503**. Nichts an der Anfrage war anders — der Anbieter war kurz nicht
+ * verfügbar.
+ *
+ * Ohne Wiederholung entscheidet damit eine Sekunde Fremdausfall über einen
+ * ganzen Lauf. Bei einem Produkt, dessen Zusage „die KI macht es und du
+ * schaust zu" lautet, ist das die falsche Sorte Fehlschlag: der Nutzer sieht
+ * einen abgebrochenen Auftrag und kann nichts tun.
+ *
+ * Bewusst **nicht** dabei: 400, 401, 403, 404. Die ändern sich beim zweiten
+ * Versuch nicht — ein falscher Schlüssel bleibt falsch, ein Modellname, den es
+ * nicht gibt, entsteht nicht durch Warten. Sie zu wiederholen kostet nur Zeit
+ * und verschleiert im Protokoll, was wirklich los war.
+ */
+const WIEDERHOLBAR: ReadonlySet<number> = new Set([429, 500, 502, 503, 504]);
+
+/** Wie oft insgesamt versucht wird. Drei Versuche, zwei Pausen. */
+const VERSUCHE = 3;
+
+/** Grundpause; verdoppelt sich je Versuch (1 s, 2 s). */
+const PAUSE_MS = 1_000;
+
+function warten(ms: number): Promise<void> {
+  return new Promise((fertig) => setTimeout(fertig, ms));
+}
+
+/**
+ * Wie lange bis zum nächsten Versuch.
+ *
+ * `Retry-After` des Anbieters geht vor: bei 429 weiß er besser als wir, wann
+ * das Kontingent wieder greift. Gedeckelt, damit eine unsinnige Angabe
+ * („3600") den Lauf nicht stillstehen lässt.
+ */
+function pauseAus(
+  antwort: Response,
+  versuch: number,
+  deckelMs: number,
+  grundMs: number,
+): number {
+  const angabe = antwort.headers.get("retry-after");
+  if (angabe !== null) {
+    const sekunden = Number(angabe);
+    if (Number.isFinite(sekunden) && sekunden > 0) {
+      return Math.min(sekunden * 1000, deckelMs);
+    }
+  }
+  return Math.min(grundMs * 2 ** (versuch - 1), deckelMs);
+}
+
+/**
  * Eine Anfrage an ein Modell.
  *
  * `fetchImpl` ist einsetzbar, damit Tests ohne Netz auskommen — ein Test, der
  * ein echtes Modell anruft, ist langsam, kostet Geld und schlägt fehl, wenn
  * gerade jemand anderes das Kontingent aufbraucht.
+ *
+ * Bei einem vorübergehenden Fehlschlag wird bis zu dreimal versucht (siehe
+ * `WIEDERHOLBAR`). `zeitgrenzeMs` gilt dabei für den **ganzen** Vorgang, nicht
+ * je Versuch — sonst verdreifacht die Wiederholung still die Wartezeit, und
+ * der Kostendeckel der Schleife greift erst nach der Runde.
  */
 export async function fragen(
   rolle: Rolle,
@@ -105,6 +163,12 @@ export async function fragen(
     readonly umgebung?: Record<string, string | undefined>;
     readonly fetchImpl?: typeof fetch;
     readonly zeitgrenzeMs?: number;
+    /**
+     * Grundpause zwischen zwei Versuchen. Nur für Tests da — aus demselben
+     * Grund wie `fetchImpl`: eine Testreihe, die echte Sekunden verwartet,
+     * wird irgendwann übersprungen, und ein übersprungener Test prüft nichts.
+     */
+    readonly pauseGrundMs?: number;
   } = {},
 ): Promise<Antwort> {
   const modell = modellFuer(rolle);
@@ -119,45 +183,72 @@ export async function fragen(
   }
   nachrichten.push({ role: "user", content: auftrag.prompt });
 
-  const abbruch = new AbortController();
-  const wecker = setTimeout(
-    () => { abbruch.abort(); },
-    optionen.zeitgrenzeMs ?? ZEITGRENZE_MS,
-  );
+  const gesamtMs = optionen.zeitgrenzeMs ?? ZEITGRENZE_MS;
+  const frist = Date.now() + gesamtMs;
 
-  let antwort: Response;
-  try {
-    antwort = await hole(`${basis}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${schluessel}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: modell.kennung,
-        messages: nachrichten,
-        temperature: 0.2,
-      }),
-      signal: abbruch.signal,
-    });
-  } catch {
-    // Die Ausnahme wird bewusst nicht angesehen und nicht durchgereicht: sie
-    // kann alles Moegliche enthalten, im schlimmsten Fall die Anfrage samt
-    // Kopfzeilen — und damit den Schluessel.
-    const grund = abbruch.signal.aborted
-      ? `Keine Antwort innerhalb von ${(optionen.zeitgrenzeMs ?? ZEITGRENZE_MS) / 1000} s`
-      : "Endpunkt nicht erreichbar";
-    throw new ModellFehler(rolle, 0, `${modell.kennung}: ${grund}`);
-  } finally {
-    clearTimeout(wecker);
+  for (let versuch = 1; ; versuch++) {
+    // Der verbleibende Rest der Gesamtfrist, nicht die volle Frist: sonst darf
+    // Versuch 3 noch einmal so lange laufen wie Versuch 1, und aus einer
+    // Zeitgrenze von 120 s werden im schlechtesten Fall 360 s.
+    const restMs = frist - Date.now();
+    if (restMs <= 0) {
+      throw new ModellFehler(
+        rolle, 0,
+        `${modell.kennung}: Keine Antwort innerhalb von ${gesamtMs / 1000} s`,
+      );
+    }
+
+    const abbruch = new AbortController();
+    const wecker = setTimeout(() => { abbruch.abort(); }, restMs);
+
+    let antwort: Response;
+    try {
+      antwort = await hole(`${basis}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${schluessel}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: modell.kennung,
+          messages: nachrichten,
+          temperature: 0.2,
+        }),
+        signal: abbruch.signal,
+      });
+    } catch {
+      // Die Ausnahme wird bewusst nicht angesehen und nicht durchgereicht: sie
+      // kann alles Moegliche enthalten, im schlimmsten Fall die Anfrage samt
+      // Kopfzeilen — und damit den Schluessel.
+      const grund = abbruch.signal.aborted
+        ? `Keine Antwort innerhalb von ${gesamtMs / 1000} s`
+        : "Endpunkt nicht erreichbar";
+      throw new ModellFehler(rolle, 0, `${modell.kennung}: ${grund}`);
+    } finally {
+      clearTimeout(wecker);
+    }
+
+    if (antwort.ok) {
+      const koerper: unknown = await antwort.json();
+      return auslesen(modell, koerper);
+    }
+
+    const letzter = versuch >= VERSUCHE;
+    if (letzter || !WIEDERHOLBAR.has(antwort.status)) {
+      throw new ModellFehler(rolle, antwort.status, erklaerung(modell, antwort.status));
+    }
+
+    const pause = pauseAus(
+      antwort,
+      versuch,
+      Math.max(frist - Date.now(), 0),
+      optionen.pauseGrundMs ?? PAUSE_MS,
+    );
+    if (pause <= 0) {
+      throw new ModellFehler(rolle, antwort.status, erklaerung(modell, antwort.status));
+    }
+    await warten(pause);
   }
-
-  if (!antwort.ok) {
-    throw new ModellFehler(rolle, antwort.status, erklaerung(modell, antwort.status));
-  }
-
-  const koerper: unknown = await antwort.json();
-  return auslesen(modell, koerper);
 }
 
 function erklaerung(modell: Modell, status: number): string {
@@ -169,7 +260,15 @@ function erklaerung(modell: Modell, status: number): string {
     return `${modell.kennung}: Dieses Modell gibt es unter dieser Kennung nicht.`;
   }
   if (status === 429) {
-    return `${modell.kennung}: Kontingent erschöpft oder gedrosselt.`;
+    return `${modell.kennung}: Kontingent erschöpft oder gedrosselt `
+      + `(${VERSUCHE} Versuche).`;
+  }
+  if (WIEDERHOLBAR.has(status)) {
+    // Der Unterschied ist wichtig: „abgelehnt" klingt nach unserem Fehler,
+    // „nicht verfügbar" ist einer beim Anbieter. Wer das liest, soll nicht
+    // anfangen, an der eigenen Konfiguration zu suchen.
+    return `${modell.kennung}: Anbieter nicht verfügbar (HTTP ${status}, `
+      + `${VERSUCHE} Versuche).`;
   }
   return `${modell.kennung}: Anfrage abgelehnt (HTTP ${status}).`;
 }

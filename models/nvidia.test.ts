@@ -112,9 +112,9 @@ describe("Wenn etwas schiefgeht", () => {
       .catch((e: unknown) => (e as Error).message);
     expect(vierNullVier).toContain("gibt es unter dieser Kennung nicht");
 
-    const gedrosselt = await fragen("mittel", { prompt: "x" },
-                                    { umgebung: UMGEBUNG, fetchImpl: antwortMit({}, 429) })
-      .catch((e: unknown) => (e as Error).message);
+    const gedrosselt = await fragen("mittel", { prompt: "x" }, {
+      umgebung: UMGEBUNG, fetchImpl: antwortMit({}, 429), pauseGrundMs: 1,
+    }).catch((e: unknown) => (e as Error).message);
     expect(gedrosselt).toContain("Kontingent");
   });
 
@@ -122,9 +122,9 @@ describe("Wenn etwas schiefgeht", () => {
     // Fehlermeldungen landen im Protokoll eines CI-Laufs, das jeder mit
     // Repo-Zugriff lesen kann.
     for (const status of [401, 404, 429, 500]) {
-      const text = await fragen("schwer", { prompt: "x" },
-                                { umgebung: UMGEBUNG, fetchImpl: antwortMit({}, status) })
-        .catch((e: unknown) => (e as Error).message);
+      const text = await fragen("schwer", { prompt: "x" }, {
+        umgebung: UMGEBUNG, fetchImpl: antwortMit({}, status), pauseGrundMs: 1,
+      }).catch((e: unknown) => (e as Error).message);
       expect(text).not.toContain("nvapi-eins");
     }
   });
@@ -177,5 +177,146 @@ describe("Wenn etwas schiefgeht", () => {
       .catch((e: unknown) => (e as Error).message);
     expect(text).not.toContain("nvapi-eins");
     expect(text).toContain("nicht erreichbar");
+  });
+});
+
+describe("Wiederholung bei vorübergehendem Fehlschlag", () => {
+  /** Antwortet der Reihe nach mit den angegebenen Status. */
+  function nacheinander(...status: number[]) {
+    let i = 0;
+    return vi.fn(() => {
+      const jetzt = status[i] ?? 500;
+      i++;
+      return Promise.resolve(
+        jetzt === 200
+          ? new Response(JSON.stringify(GUT), {
+              status: 200, headers: { "Content-Type": "application/json" },
+            })
+          : new Response("", { status: jetzt }),
+      );
+    });
+  }
+
+  it("versucht es nach einem 503 erneut und liefert die Antwort", async () => {
+    // Der gemessene Anlass: dasselbe Modell antwortete um 10:15 in 1550 ms und
+    // gab um 10:21 ein 503. Ohne Wiederholung entscheidet eine Sekunde
+    // Fremdausfall über einen ganzen Lauf.
+    const hole = nacheinander(503, 200);
+    const antwort = await fragen("schwer", { prompt: "hallo" }, {
+      umgebung: UMGEBUNG, fetchImpl: hole as unknown as typeof fetch,
+      zeitgrenzeMs: 5_000, pauseGrundMs: 1,
+    });
+    expect(antwort.text).toBe("Ein Satz.");
+    expect(hole).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([429, 500, 502, 503, 504])("wiederholt bei %i", async (status) => {
+    const hole = nacheinander(status, 200);
+    await fragen("schwer", { prompt: "x" }, {
+      umgebung: UMGEBUNG, fetchImpl: hole as unknown as typeof fetch,
+      zeitgrenzeMs: 5_000, pauseGrundMs: 1,
+    });
+    expect(hole).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([400, 401, 403, 404])("wiederholt NICHT bei %i", async (status) => {
+    // Ein falscher Schlüssel bleibt falsch, und ein Modellname, den es nicht
+    // gibt, entsteht nicht durch Warten. Wiederholen kostet hier nur Zeit und
+    // verschleiert im Protokoll, was wirklich los war.
+    const hole = nacheinander(status, 200);
+    await expect(
+      fragen("schwer", { prompt: "x" }, {
+        umgebung: UMGEBUNG, fetchImpl: hole as unknown as typeof fetch,
+        zeitgrenzeMs: 5_000, pauseGrundMs: 1,
+      }),
+    ).rejects.toBeInstanceOf(ModellFehler);
+    expect(hole).toHaveBeenCalledTimes(1);
+  });
+
+  it("gibt nach drei Versuchen auf", async () => {
+    const hole = nacheinander(503, 503, 503, 200);
+    await expect(
+      fragen("schwer", { prompt: "x" }, {
+        umgebung: UMGEBUNG, fetchImpl: hole as unknown as typeof fetch,
+        zeitgrenzeMs: 10_000, pauseGrundMs: 1,
+      }),
+    ).rejects.toThrow(/nicht verfügbar/);
+    expect(hole).toHaveBeenCalledTimes(3);
+  });
+
+  it("nennt beim Aufgeben den Anbieter, nicht die eigene Anfrage", async () => {
+    // „abgelehnt" klingt nach unserem Fehler, „nicht verfügbar" ist einer beim
+    // Anbieter. Wer das liest, soll nicht an der eigenen Konfiguration suchen.
+    const hole = nacheinander(503, 503, 503);
+    let meldung = "";
+    try {
+      await fragen("schwer", { prompt: "x" }, {
+        umgebung: UMGEBUNG, fetchImpl: hole as unknown as typeof fetch,
+        zeitgrenzeMs: 10_000, pauseGrundMs: 1,
+      });
+    } catch (fehler) {
+      meldung = (fehler as Error).message;
+    }
+    expect(meldung).toContain("Anbieter nicht verfügbar");
+    expect(meldung).toContain("3 Versuche");
+    expect(meldung).not.toContain("abgelehnt");
+  });
+
+  it("achtet auf Retry-After statt auf die eigene Pause", async () => {
+    let i = 0;
+    const hole = vi.fn(() => {
+      i++;
+      return Promise.resolve(
+        i === 1
+          ? new Response("", { status: 429, headers: { "Retry-After": "0.05" } })
+          : new Response(JSON.stringify(GUT), {
+              status: 200, headers: { "Content-Type": "application/json" },
+            }),
+      );
+    });
+    const begonnen = Date.now();
+    await fragen("schwer", { prompt: "x" }, {
+      // Grundpause 1000 ms: der Test zeigt nur dann etwas, wenn Retry-After
+      // (50 ms) sie tatsächlich verdrängt.
+      umgebung: UMGEBUNG, fetchImpl: hole as unknown as typeof fetch,
+      zeitgrenzeMs: 5_000, pauseGrundMs: 1_000,
+    });
+    // Bei 429 weiß der Anbieter besser als wir, wann sein Kontingent greift.
+    // 50 ms statt der eigenen 1000 ms Grundpause.
+    expect(Date.now() - begonnen).toBeLessThan(800);
+  });
+
+  it("lässt eine unsinnige Retry-After-Angabe nicht den Lauf anhalten", async () => {
+    // „3600" wäre eine Stunde. Die Gesamtfrist deckelt das.
+    const hole = vi.fn(() =>
+      Promise.resolve(new Response("", {
+        status: 503, headers: { "Retry-After": "3600" },
+      })),
+    );
+    const begonnen = Date.now();
+    await expect(
+      fragen("schwer", { prompt: "x" }, {
+        umgebung: UMGEBUNG, fetchImpl: hole as unknown as typeof fetch,
+        zeitgrenzeMs: 300,
+      }),
+    ).rejects.toBeInstanceOf(ModellFehler);
+    expect(Date.now() - begonnen).toBeLessThan(2_000);
+  });
+
+  it("die Zeitgrenze gilt für den ganzen Vorgang, nicht je Versuch", async () => {
+    // Sonst verdreifacht die Wiederholung still die Wartezeit — und der
+    // Kostendeckel der Schleife greift erst nach der Runde.
+    const hole = vi.fn(() =>
+      Promise.resolve(new Response("", { status: 503 })),
+    );
+    const begonnen = Date.now();
+    await expect(
+      fragen("schwer", { prompt: "x" }, {
+        umgebung: UMGEBUNG, fetchImpl: hole as unknown as typeof fetch,
+        zeitgrenzeMs: 400,
+      }),
+    ).rejects.toBeInstanceOf(ModellFehler);
+    const gedauert = Date.now() - begonnen;
+    expect(gedauert).toBeLessThan(1_500);
   });
 });
