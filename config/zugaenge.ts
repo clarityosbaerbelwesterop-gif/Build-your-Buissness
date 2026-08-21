@@ -40,19 +40,27 @@ export interface Zugang {
  * Anfrage vergraben ist.
  */
 export const ZUGAENGE = {
-  nvidiaApiKey: {
-    name: "NVIDIA_API_KEY",
-    wofuer: "Zugang zu den Modell-Endpunkten",
+  // Drei Modelle, drei Schluessel. Getrennt, weil sie es in den Secrets auch
+  // sind — und weil ein abgelaufener Schluessel dann genau ein Modell
+  // ausfallen laesst statt alle drei.
+  nvApiKey1: {
+    name: "NV_API_KEY_1",
+    wofuer: "Zugang zu nemotron-3-ultra-550b-a55b",
+    abStufe: "M1",
+  },
+  nvApiKey2: {
+    name: "NV_API_KEY_2",
+    wofuer: "Zugang zu laguna-xs-2.1",
+    abStufe: "M1",
+  },
+  nvApiKey3: {
+    name: "NV_API_KEY_3",
+    wofuer: "Zugang zu step-3.7-flash",
     abStufe: "M1",
   },
   nvidiaBaseUrl: {
     name: "NVIDIA_BASE_URL",
     wofuer: "Endpunkt der Modelle",
-    abStufe: "M1",
-  },
-  nvidiaModell: {
-    name: "NVIDIA_MODEL",
-    wofuer: "Welches Modell angefragt wird",
     abStufe: "M1",
   },
   neonApiKey: {
@@ -74,7 +82,6 @@ const VORGABEN: Partial<Record<ZugangsName, string>> = {
   // Aus dem bisherigen Aufbau übernommen — der Endpunkt ist öffentlich
   // dokumentiert und kein Geheimnis.
   nvidiaBaseUrl: "https://integrate.api.nvidia.com/v1",
-  nvidiaModell: "moonshotai/kimi-k2-instruct",
 };
 
 export class ZugangFehlt extends Error {

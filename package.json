@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "zugaenge": "tsx config/pruefen.ts",
+    "rauchtest": "tsx models/rauchtest.ts",
     "pruefen": "npm run lint && npm run typecheck && npm run test"
   },
   "dependencies": {
