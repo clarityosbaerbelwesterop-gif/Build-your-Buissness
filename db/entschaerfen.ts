@@ -43,3 +43,26 @@ export function projektAusAbsage(text: string): string | undefined {
   const treffer = /subject_project_id:\s*\\?"([a-z0-9-]+)\\?"/i.exec(text);
   return treffer?.[1];
 }
+
+/**
+ * Ein Wert aus der Umgebung — leer zählt als nicht gesetzt.
+ *
+ * GitHub Actions setzt ein Secret, das es nicht gibt, als **leere
+ * Zeichenkette** in die Umgebung, nicht als „fehlt". Damit greift
+ * `process.env["X"] ?? "vorgabe"` nicht: `""` ist nicht nullish, also gewinnt
+ * der leere Wert und die Vorgabe wird nie benutzt.
+ *
+ * Genau das ist passiert. Die Anfrage ging raus als
+ *
+ *     /connection_uri?database_name=&role_name=
+ *
+ * und Neon antwortete mit „unknown error" — verständlich, denn die Frage war
+ * unsinnig. Ein leerer Wert ist keine Angabe.
+ */
+export function ausUmgebung(
+  name: string,
+  umgebung: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const wert = umgebung[name]?.trim();
+  return wert === undefined || wert.length === 0 ? undefined : wert;
+}
