@@ -18,6 +18,31 @@ Noch nichts. M0 ist der Motor, keine Oberfläche. Der erste sichtbare Schritt is
 das Prüfprotokoll aus CHATHUB.md Zustand 4 — es braucht das, was hier gebaut
 wurde, als Datenquelle.
 
+## Vorfall: drei NVIDIA-Schlüssel lagen im Repository
+
+Am 21.08. wurden drei Commits direkt auf `main` gelegt, jeder mit einem echten
+NVIDIA-Schlüssel in einer `.env`:
+
+- `e4d1115` GLM-5.2
+- `ff005de` laguna-xs-2.1
+- `da2d9ca` nemotron-3-ultra-550b
+
+**Alle drei sind als kompromittiert zu behandeln.** Das Repository ist zwar
+privat, aber die Schlüssel stehen im Verlauf, in jedem Klon und in jedem
+CI-Protokoll, das die Datei gelesen hat. Sie zu löschen macht sie nicht
+ungültig.
+
+**Was zu tun ist — und nur der Kontoinhaber kann es:** die drei Schlüssel in
+der NVIDIA-Console widerrufen und neu ausstellen. Die neuen Werte kommen in die
+GitHub Secrets, nicht in eine Datei.
+
+**Warum der Wächter nichts gemeldet hat:** `geheimnisse.yml` lief nur bei
+`pull_request`. Die drei Commits gingen direkt auf `main`, also hat er sie nie
+gesehen. Ein Wächter, der nur den höflichen Weg bewacht, bewacht nichts.
+Behoben: er läuft jetzt bei jedem Push und prüft zusätzlich den ganzen Baum auf
+eine vorhandene `.env` — Muster können sich ändern, eine `.env` im Repo ist
+immer falsch.
+
 ## Offene Fragen
 
 ### 1. Sandbox-Laufzeit (blockiert M1)

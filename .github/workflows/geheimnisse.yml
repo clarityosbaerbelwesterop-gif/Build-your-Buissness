@@ -1,17 +1,49 @@
 name: Geheimnisse
 
-# CLAUDE.md §2.4: "Ein Key im Diff ist ein Abbruchgrund." Diese Regel steht
-# sonst nur im Text. Hier haelt sie jemand durch.
+# CLAUDE.md §2.4: "Ein Key im Diff ist ein Abbruchgrund."
 #
-# Der Lauf prueft nur die neu hinzugekommenen Zeilen eines PR, nicht den ganzen
-# Baum: ein Muster, das schon in main steht, ist ein anderes Problem und soll
-# nicht jeden folgenden PR rot faerben.
+# Dieser Wächter hat einmal versagt und der Grund steht hier, damit er nicht
+# noch einmal so zugeschnitten wird: er lief **nur** bei `pull_request`. Drei
+# Commits gingen direkt auf main, jeder mit einem echten Schlüssel in einer
+# .env — und der Wächter hat sie nie gesehen. Ein Wächter, der nur den
+# höflichen Weg bewacht, bewacht nichts.
+#
+# Zwei Prüfungen, und die zweite ist die wichtigere:
+#
+# 1. Neue Zeilen eines PR auf Schlüsselmuster.
+# 2. Der **ganze Baum** auf eine vorhandene .env — bei jedem Push, auch auf
+#    main. Muster können sich ändern; eine .env im Repo ist immer falsch.
 
 on:
   pull_request:
+  push:
 
 jobs:
+  keine-env-datei:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Liegt eine .env im Repo?
+        run: |
+          set -euo pipefail
+          # `git ls-files` statt `ls`: es geht um das, was versioniert ist.
+          GEFUNDEN=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.example$' || true)
+          if [ -n "$GEFUNDEN" ]; then
+            echo "Eine .env liegt im Repository:"
+            echo "$GEFUNDEN"
+            echo
+            echo "Werte gehoeren in die GitHub Secrets."
+            echo "Settings -> Secrets and variables -> Actions"
+            echo
+            echo "Wichtig: die Datei zu loeschen genuegt nicht. Was einmal"
+            echo "committet wurde, steht im Verlauf. Jeder Schluessel darin"
+            echo "muss beim Anbieter widerrufen und neu ausgestellt werden."
+            exit 1
+          fi
+          echo "Keine .env im Repository."
+
   keine-keys-im-diff:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +63,8 @@ jobs:
 
           if echo "$NEU" | grep -Eq "$MUSTER"; then
             echo "Zugangsdaten im Diff gefunden:"
-            echo "$NEU" | grep -En "$MUSTER" | sed 's/\(.\{80\}\).*/\1…/'
+            # Nur Datei und Zeile, nie der Wert — dieses Protokoll ist lesbar.
+            echo "$NEU" | grep -En "$MUSTER" | cut -c1-40 | sed 's/$/…/'
             echo
             echo "Keys gehoeren in GitHub Secrets, nicht in den Quelltext."
             exit 1
