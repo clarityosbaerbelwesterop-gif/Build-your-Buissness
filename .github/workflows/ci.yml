@@ -18,6 +18,15 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # Welche Zugaenge liegen in den Secrets? Gibt nur Wahrheitswerte aus,
+      # nie einen Wert — das Protokoll eines Laufs ist fuer jeden lesbar, der
+      # Zugriff auf das Repository hat.
+      #
+      # Faerbt den Lauf NICHT rot, wenn etwas fehlt: in M0 braucht kein Schritt
+      # einen Zugang. Ein Waechter, der bei jedem PR schreit, ohne dass jemand
+      # etwas falsch gemacht hat, wird nach der dritten Meldung ignoriert.
+      - name: Zugänge prüfen
+        run: npm run zugaenge
     env:
       # Die Modell-Zugaenge werden hier durchgereicht, damit sie an genau einer
       # Stelle stehen. In M0 ruft nichts ein Modell — die Angreifer arbeiten
@@ -27,3 +36,6 @@ jobs:
       # Was in den GitHub Secrets liegen muss, steht in STATUS.md.
       NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
       NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL }}
+      NVIDIA_MODEL: ${{ secrets.NVIDIA_MODEL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
