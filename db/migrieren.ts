@@ -168,6 +168,48 @@ if (nurLesen) {
   process.exit(0);
 }
 
+/**
+ * Der Zweig, auf dem die Migration laufen soll.
+ *
+ * Neon verlangt bei einer Abfrage genau eines von `endpoint_id` oder
+ * `branch_id` — ein Projekt kann mehrere Zweige haben, und ohne Angabe waere
+ * unklar, welchen man meint. Das ist dieselbe Vorsicht, aus der auch dieses
+ * Skript bei mehreren Projekten abbricht.
+ *
+ * Gewaehlt wird der voreingestellte Zweig. Findet sich keiner, wird nicht
+ * geraten: eine Migration auf dem falschen Zweig faellt erst auf, wenn jemand
+ * die Tabellen sucht und sie nicht findet.
+ */
+async function zweigWaehlen(projektId: string): Promise<{ id: string; name: string }> {
+  const gewuenscht = process.env["NEON_BRANCH_ID"]?.trim();
+  if (gewuenscht !== undefined && gewuenscht.length > 0) {
+    return { id: gewuenscht, name: gewuenscht };
+  }
+  const daten = await neon(`/projects/${projektId}/branches`, schluessel) as {
+    branches?: { id: string; name: string; default?: boolean; primary?: boolean }[];
+  };
+  const zweige = daten.branches ?? [];
+  if (zweige.length === 0) throw new Error("Das Projekt hat keinen Zweig.");
+
+  // `default` ist das heutige Feld, `primary` das aeltere. Beide pruefen ist
+  // billiger, als bei einer Umbenennung stillschweigend den ersten zu nehmen.
+  const vorgabe = zweige.find((z) => z.default === true || z.primary === true);
+  if (vorgabe !== undefined) return vorgabe;
+
+  if (zweige.length === 1) {
+    const einziger = zweige[0];
+    if (einziger !== undefined) return einziger;
+  }
+  const namen = zweige.map((z) => `${z.name} (${z.id})`).join(", ");
+  throw new Error(
+    `Kein voreingestellter Zweig gefunden. Vorhanden: ${namen}. `
+    + "Bitte NEON_BRANCH_ID als Secret setzen — ich rate hier nicht.",
+  );
+}
+
+const zweig = await zweigWaehlen(projekt.id);
+console.error(`Zweig: ${zweig.name} (${zweig.id})`);
+
 await neon(`/projects/${projekt.id}/query`, schluessel, {
   method: "POST",
   // Die Feldnamen sind `db_name` und `role_name`, nicht `database`/`role`.
@@ -182,6 +224,7 @@ await neon(`/projects/${projekt.id}/query`, schluessel, {
     query: sql,
     db_name: process.env["NEON_DATABASE"]?.trim() ?? "neondb",
     role_name: process.env["NEON_ROLE"]?.trim() ?? "neondb_owner",
+    branch_id: zweig.id,
   }),
 });
 
