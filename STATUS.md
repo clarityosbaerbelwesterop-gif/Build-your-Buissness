@@ -1,6 +1,7 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: M0 abgeschlossen. 108 Tests, Lint und Typprüfung grün.
+Stand: M0 abgeschlossen. 160 Tests, Lint und Typprüfung grün.
+Drei Modelle antworten, Neon-Schema ist angewendet.
 
 ## Was steht
 
@@ -103,6 +104,37 @@ einzigen Lauf ist keine Messung. Sollte sich das halten, gehört die Rolle
 „mittel" überdacht — sie ist als Alltagsrolle gedacht und wäre damit die
 langsamste von dreien.
 
+## Neon: Schema angewendet
+
+**Stand: erledigt.** Die vier Tabellen liegen mit `ENABLE`, `FORCE` und Policy
+im Projekt `damp-dream-67070160`. Beleg: `Actions → Neon`, Lauf vom 21.08.,
+Schritt „Anwenden" grün.
+
+Der Weg dahin hat fünf Anläufe gebraucht, und jeder hat etwas anderes gefunden:
+
+| Antwort | Was sie hieß |
+|---|---|
+| `404 /projects` | Der Schlüssel ist nicht falsch — er ist **an ein Projekt gebunden** und darf gar keine Liste abrufen. Er nennt sein Projekt in der Absage. |
+| `400 db_name (field required)` | Die Felder heißen `db_name`/`role_name`, nicht `database`/`role`. |
+| `400 exactly one of endpoint_id or branch_id` | Ein Projekt hat mehrere Zweige. |
+| `410 endpoint has been removed` | **Der ganze API-Weg ist abgeschafft.** Die zwei Korrekturen davor haben eine Schnittstelle repariert, die es nicht mehr gibt. |
+| `400 unknown error` bei `?database_name=&role_name=` | Mein Fehler: GitHub setzt ein nicht hinterlegtes Secret als **leere Zeichenkette**, und `"" ?? "vorgabe"` greift nicht. |
+
+Die ersten vier Antworten hat nur deshalb jemand lesen können, weil die
+Fehlermeldung des Anbieters durchgereicht wird — gefiltert um alles, was nach
+einem Schlüssel aussieht. Vorher stand dort „HTTP 404 bei /projects" und sonst
+nichts. Das ist dieselbe Regel, die BYB seinen Kunden verkauft: „geprüft auf X,
+gefunden Y" statt „geht nicht".
+
+Die Migration läuft jetzt über eine direkte Postgres-Verbindung. Sie holt die
+Verbindungszeichenfolge aus `DATABASE_URL`, und wenn die fehlt, über die
+Neon-API. Ausgegeben wird sie nie — sie trägt das Passwort im Klartext.
+
+**Was das noch nicht heißt:** dass die Policies im Betrieb greifen. Geprüft
+ist, dass das Schema fehlerfrei durchgelaufen ist. Ein Test, der sich mit zwei
+verschiedenen Kennungen anmeldet und nachweist, dass keiner die Zeilen des
+anderen sieht, fehlt — und das ist die Prüfung, die zählt.
+
 ## Offene Fragen
 
 ### 1. Sandbox-Laufzeit (blockiert M1)
@@ -167,7 +199,7 @@ Rot färbt er den Lauf nicht, denn in M0 braucht kein Schritt einen Zugang.
 | `NVIDIA_BASE_URL` | Endpunkt; ohne Angabe `https://integrate.api.nvidia.com/v1` | nein |
 | `NEON_API_KEY` | Neon-Projekt lesen und Migration anwenden | ja |
 | `NEON_PROJECT_ID` | Nur nötig, wenn im Konto mehr als ein Projekt liegt | nein |
-| `DATABASE_URL` | Verbindung zur Datenbank aus der Anwendung heraus | ja |
+| `DATABASE_URL` | Verbindung zur Datenbank. Fehlt sie, holt die Migration sie über die Neon-API | ja |
 
 Hinterlegt werden sie unter **Settings → Secrets and variables → Actions →
 New repository secret**. Die Namen stehen in `config/zugaenge.ts` und in
