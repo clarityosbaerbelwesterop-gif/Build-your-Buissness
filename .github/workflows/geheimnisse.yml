@@ -1,0 +1,39 @@
+name: Geheimnisse
+
+# CLAUDE.md §2.4: "Ein Key im Diff ist ein Abbruchgrund." Diese Regel steht
+# sonst nur im Text. Hier haelt sie jemand durch.
+#
+# Der Lauf prueft nur die neu hinzugekommenen Zeilen eines PR, nicht den ganzen
+# Baum: ein Muster, das schon in main steht, ist ein anderes Problem und soll
+# nicht jeden folgenden PR rot faerben.
+
+on:
+  pull_request:
+
+jobs:
+  keine-keys-im-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Neue Zeilen auf Zugangsdaten pruefen
+        run: |
+          set -euo pipefail
+          BASIS="origin/${{ github.base_ref }}"
+          git fetch --quiet origin "${{ github.base_ref }}"
+          NEU=$(git diff "$BASIS"...HEAD --unified=0 | grep '^+' | grep -v '^+++' || true)
+
+          # Bewusst wenige, praezise Muster. Eine lange Liste vager Ausdruecke
+          # erzeugt Fehlalarme, und ein Waechter, dem niemand glaubt, wird
+          # uebergangen.
+          MUSTER='sk-[A-Za-z0-9]{20,}|nvapi-[A-Za-z0-9_-]{20,}|napi_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|postgres(ql)?://[^:]+:[^@[:space:]]+@'
+
+          if echo "$NEU" | grep -Eq "$MUSTER"; then
+            echo "Zugangsdaten im Diff gefunden:"
+            echo "$NEU" | grep -En "$MUSTER" | sed 's/\(.\{80\}\).*/\1…/'
+            echo
+            echo "Keys gehoeren in GitHub Secrets, nicht in den Quelltext."
+            exit 1
+          fi
+          echo "Keine Zugangsdaten in den neuen Zeilen."
