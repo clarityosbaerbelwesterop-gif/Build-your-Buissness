@@ -1,0 +1,47 @@
+name: Sprache
+
+# CLAUDE.md §2.2: niemals „sicher" behaupten. Erlaubt ist „geprüft auf X,
+# gefunden Y, behoben Z".
+#
+# Die Regel steht sonst nur im Text. Sie ist die wichtigste im Repo, weil sie
+# das Versprechen des Produkts betrifft — und ein Versprechen, das niemand
+# durchsetzt, hält nur so lange, wie jemand daran denkt.
+#
+# Geprüft wird der ganze Baum, nicht nur der Diff: eine solche Zusage darf auch
+# nicht unbemerkt in main liegen bleiben.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  keine-sicherheitsversprechen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verbotene Zusagen suchen
+        run: |
+          set -euo pipefail
+
+          # Wortgrenzen, damit „Sicherheit", „absichern" und „Row Level
+          # Security" nicht anschlagen — das sind Beschreibungen, keine Zusagen.
+          MUSTER='\b(sicher|unhackbar|garantiert|bulletproof|wasserdicht|lückenlos)\b'
+
+          # Die Kontextdateien nennen die verbotenen Woerter, um sie zu
+          # verbieten. Ein Waechter, der die Regel selbst anschlaegt, ist
+          # nutzlos — deshalb sind sie ausgenommen.
+          TREFFER=$(grep -rniE "$MUSTER" \
+            --include='*.ts' --include='*.tsx' --include='*.md' \
+            --exclude-dir=node_modules --exclude-dir=.git \
+            --exclude=CLAUDE.md --exclude=CHATHUB.md --exclude=USER.md \
+            --exclude=DESIGN-UI.md . || true)
+
+          if [ -n "$TREFFER" ]; then
+            echo "Verbotene Zusage gefunden (CLAUDE.md §2.2):"
+            echo "$TREFFER"
+            echo
+            echo "Erlaubt ist: \"geprüft auf X, gefunden Y, behoben Z\"."
+            exit 1
+          fi
+          echo "Keine Sicherheitszusagen im Text."

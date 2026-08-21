@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+    env:
+      # Die Modell-Zugaenge werden hier durchgereicht, damit sie an genau einer
+      # Stelle stehen. In M0 ruft nichts ein Modell — die Angreifer arbeiten
+      # statisch auf dem Quelltext. Ab M1 braucht der LLM-gestuetzte Angreifer
+      # sie, und dann muss niemand die Datei suchen.
+      #
+      # Was in den GitHub Secrets liegen muss, steht in STATUS.md.
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL }}
