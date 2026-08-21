@@ -170,7 +170,19 @@ if (nurLesen) {
 
 await neon(`/projects/${projekt.id}/query`, schluessel, {
   method: "POST",
-  body: JSON.stringify({ query: sql, database: "neondb", role: "neondb_owner" }),
+  // Die Feldnamen sind `db_name` und `role_name`, nicht `database`/`role`.
+  // Der erste Anwendungsversuch endete an genau dieser Stelle mit
+  // „invalid: db_name (field required)" — die Anfrage war sonst korrekt, sie
+  // kam beim richtigen Projekt an und wurde nur wegen der Benennung abgelehnt.
+  //
+  // Beide ueberschreibbar: `neondb` und `neondb_owner` sind Neons Vorgaben,
+  // aber wer sein Projekt selbst angelegt hat, kann andere Namen haben. Ein
+  // fester Wert waere hier ein Fehlschlag ohne Ausweg.
+  body: JSON.stringify({
+    query: sql,
+    db_name: process.env["NEON_DATABASE"]?.trim() ?? "neondb",
+    role_name: process.env["NEON_ROLE"]?.trim() ?? "neondb_owner",
+  }),
 });
 
 console.error("Schema angewendet.");
