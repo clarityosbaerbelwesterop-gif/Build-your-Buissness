@@ -30,14 +30,16 @@ NVIDIA-Schlüssel in einer `.env`:
 - `ff005de` laguna-xs-2.1
 - `da2d9ca` nemotron-3-ultra-550b
 
-**Alle drei sind als kompromittiert zu behandeln.** Das Repository ist zwar
-privat, aber die Schlüssel stehen im Verlauf, in jedem Klon und in jedem
-CI-Protokoll, das die Datei gelesen hat. Sie zu löschen macht sie nicht
-ungültig.
+**Stand: entschärft.** Die Werte, die jetzt in `NV_API_KEY_1/2/3` liegen, sind
+**andere** als die drei aus der `.env` — die im Verlauf stehenden sind nicht in
+Gebrauch.
 
-**Was zu tun ist — und nur der Kontoinhaber kann es:** die drei Schlüssel in
-der NVIDIA-Console widerrufen und neu ausstellen. Die neuen Werte kommen in die
-GitHub Secrets, nicht in eine Datei.
+Was offen bleibt: die drei alten Schlüssel stehen weiterhin im Git-Verlauf, in
+jedem Klon und in jedem CI-Protokoll, das die Datei gelesen hat. Sie zu löschen
+macht sie nicht ungültig. Solange sie bei NVIDIA nicht widerrufen sind, kann
+jeder mit Repo-Zugriff sie benutzen — auf Kosten desselben Kontos. Der Widerruf
+in der NVIDIA-Console ist der einzige Weg, das zu beenden, und nur der
+Kontoinhaber kann ihn auslösen.
 
 **Warum der Wächter nichts gemeldet hat:** `geheimnisse.yml` lief nur bei
 `pull_request`. Die drei Commits gingen direkt auf `main`, also hat er sie nie
