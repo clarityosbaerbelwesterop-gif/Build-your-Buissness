@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { zugang } from "../config/zugaenge.js";
-import { entschaerfen } from "./entschaerfen.js";
+import { entschaerfen, projektAusAbsage } from "./entschaerfen.js";
 
 const API = "https://console.neon.tech/api/v2";
 
@@ -83,6 +83,14 @@ async function projekteHolen(schluessel: string): Promise<Projekt[]> {
     if (projekte.length > 0) return projekte;
   } catch (fehler) {
     if (!(fehler instanceof NeonFehler) || fehler.status !== 404) throw fehler;
+    // Ein projektgebundener Schluessel nennt beim Ablehnen sein Projekt. Dann
+    // ist die Frage „welches Projekt?" schon beantwortet, und jede weitere
+    // Anfrage waere nur ein weiteres 404.
+    const ausAbsage = projektAusAbsage(fehler.message);
+    if (ausAbsage !== undefined) {
+      console.error(`  Schlüssel ist an ein Projekt gebunden: ${ausAbsage}`);
+      return [{ id: ausAbsage, name: ausAbsage }];
+    }
     console.error("  /projects ohne org_id: 404 — versuche es je Organisation.");
   }
 
@@ -99,32 +107,37 @@ async function projekteHolen(schluessel: string): Promise<Projekt[]> {
 
   const gesammelt: Projekt[] = [];
   for (const org of liste) {
-    const daten = await neon(
-      `/projects?org_id=${encodeURIComponent(org.id)}`,
-      schluessel,
-    ) as { projects?: Projekt[] };
-    gesammelt.push(...(daten.projects ?? []));
+    try {
+      const daten = await neon(
+        `/projects?org_id=${encodeURIComponent(org.id)}`,
+        schluessel,
+      ) as { projects?: Projekt[] };
+      gesammelt.push(...(daten.projects ?? []));
+    } catch (fehler) {
+      if (!(fehler instanceof NeonFehler) || fehler.status !== 404) throw fehler;
+      const ausAbsage = projektAusAbsage(fehler.message);
+      if (ausAbsage === undefined) throw fehler;
+      console.error(`  Schlüssel ist an ein Projekt gebunden: ${ausAbsage}`);
+      return [{ id: ausAbsage, name: ausAbsage }];
+    }
   }
   return gesammelt;
 }
 
 async function projektWaehlen(schluessel: string): Promise<Projekt> {
   const gewuenscht = process.env["NEON_PROJECT_ID"]?.trim();
+
+  // Steht die Kennung fest, ist die Liste ueberfluessig — und ein
+  // projektgebundener Schluessel darf sie ohnehin nicht abrufen. Die Liste
+  // dient dem Finden, nicht dem Arbeiten.
+  if (gewuenscht !== undefined && gewuenscht.length > 0) {
+    return { id: gewuenscht, name: gewuenscht };
+  }
+
   const projekte = await projekteHolen(schluessel);
 
   if (projekte.length === 0) {
     throw new Error("Im Neon-Konto liegt kein Projekt.");
-  }
-  if (gewuenscht !== undefined && gewuenscht.length > 0) {
-    const treffer = projekte.find((p) => p.id === gewuenscht);
-    if (treffer === undefined) {
-      const namen = projekte.map((p) => `${p.name} (${p.id})`).join(", ");
-      throw new Error(
-        `NEON_PROJECT_ID zeigt auf ein Projekt, das dieser Schlüssel nicht `
-        + `sieht. Sichtbar sind: ${namen}`,
-      );
-    }
-    return treffer;
   }
   if (projekte.length > 1) {
     // Raten waere hier besonders schlecht: die Migration legt Tabellen an,

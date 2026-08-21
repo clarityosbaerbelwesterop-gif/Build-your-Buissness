@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { entschaerfen } from "./entschaerfen.js";
+import { entschaerfen, projektAusAbsage } from "./entschaerfen.js";
 
 describe("entschaerfen", () => {
   it.each([
@@ -48,5 +48,38 @@ describe("entschaerfen", () => {
 
   it("kommt mit leerem Text zurecht", () => {
     expect(entschaerfen("")).toBe("");
+  });
+});
+
+describe("projektAusAbsage", () => {
+  it("liest die Kennung aus der echten Absage", () => {
+    // Wortlaut aus dem Protokoll von Lauf 32485996512, nur der Schlüssel
+    // ist da ohnehin nie aufgetaucht.
+    const absage = 'Neon: HTTP 404 bei /projects?org_id=org-shiny-flower-01403126 — '
+      + '{"request_id":"25c8","code":"","message":"not allowed to perform actions '
+      + 'outside the project this key is scoped to; '
+      + 'subject_project_id:\\"damp-dream-67070160\\""}';
+    expect(projektAusAbsage(absage)).toBe("damp-dream-67070160");
+  });
+
+  it("liest sie auch ohne die maskierten Anführungszeichen", () => {
+    // Je nachdem, ob der Text durch JSON.stringify gelaufen ist, stehen die
+    // Anführungszeichen maskiert da oder nicht.
+    expect(projektAusAbsage('subject_project_id:"still-sun-42"'))
+      .toBe("still-sun-42");
+  });
+
+  it.each([
+    ["andere Absage", "not allowed"],
+    ["leer", ""],
+    ["ähnlich, aber ohne Wert", 'subject_project_id:""'],
+  ])("gibt bei %s nichts zurück", (_fall, text) => {
+    expect(projektAusAbsage(text)).toBeUndefined();
+  });
+
+  it("erfindet keine Kennung aus einem Feld mit ähnlichem Namen", () => {
+    // `project_id` ist nicht `subject_project_id`. Das falsche Projekt zu
+    // migrieren merkt niemand sofort.
+    expect(projektAusAbsage('project_id:"fremdes-projekt-99"')).toBeUndefined();
   });
 });

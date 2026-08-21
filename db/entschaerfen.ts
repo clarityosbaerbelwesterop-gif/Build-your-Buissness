@@ -22,3 +22,24 @@ export function entschaerfen(text: string): string {
     .replace(/Bearer\s+\S+/gi, "Bearer [entfernt]")
     .slice(0, HOECHSTLAENGE);
 }
+
+/**
+ * Die Projektkennung aus einer Neon-Absage herausziehen.
+ *
+ * Neon kennt eine dritte Sorte Schlüssel, die in der Dokumentation zu
+ * `/projects` nicht vorkommt: einen **projektgebundenen**. Der darf gar keine
+ * Liste abrufen — dafür nennt er beim Ablehnen sein Projekt:
+ *
+ *     not allowed to perform actions outside the project this key is scoped
+ *     to; subject_project_id:"damp-dream-67070160"
+ *
+ * Das ist die vollständige Antwort auf „welches Projekt?", nur in Form einer
+ * Fehlermeldung. Sie zu lesen, statt den Menschen nach etwas zu fragen, das
+ * der Dienst gerade gesagt hat, ist der kürzere Weg.
+ *
+ * Eine Projektkennung ist kein Geheimnis — sie steht in jeder Neon-URL.
+ */
+export function projektAusAbsage(text: string): string | undefined {
+  const treffer = /subject_project_id:\s*\\?"([a-z0-9-]+)\\?"/i.exec(text);
+  return treffer?.[1];
+}
