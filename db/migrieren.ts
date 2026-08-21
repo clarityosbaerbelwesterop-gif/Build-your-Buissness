@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { zugang } from "../config/zugaenge.js";
+import { entschaerfen, projektAusAbsage } from "./entschaerfen.js";
 
 const API = "https://console.neon.tech/api/v2";
 
@@ -22,7 +23,25 @@ interface Projekt {
   readonly name: string;
 }
 
-async function neon(pfad: string, schluessel: string, init?: RequestInit): Promise<unknown> {
+interface Organisation {
+  readonly id: string;
+  readonly name: string;
+}
+
+class NeonFehler extends Error {
+  readonly status: number;
+  constructor(status: number, pfad: string, hinweis: string) {
+    super(`Neon: HTTP ${status} bei ${pfad}${hinweis}`);
+    this.name = "NeonFehler";
+    this.status = status;
+  }
+}
+
+async function neon(
+  pfad: string,
+  schluessel: string,
+  init?: RequestInit,
+): Promise<unknown> {
   const antwort = await fetch(`${API}${pfad}`, {
     ...init,
     headers: {
@@ -32,27 +51,93 @@ async function neon(pfad: string, schluessel: string, init?: RequestInit): Promi
     },
   });
   if (!antwort.ok) {
-    // Nur Status und Pfad — die Antwort eines Anbieters kann die Anfrage
-    // zurueckspiegeln, samt Kopfzeilen.
-    throw new Error(`Neon lehnte ab (HTTP ${antwort.status}) bei ${pfad}`);
+    // Frueher stand hier nur Status und Pfad. Das war zu wenig: ein „HTTP 404
+    // bei /projects" liess offen, ob der Schluessel falsch ist, der Pfad, oder
+    // ob schlicht ein Parameter fehlt. Die Meldung des Anbieters beantwortet
+    // das meistens — gefiltert, damit kein Schluessel im CI-Protokoll landet.
+    const roh = await antwort.text().catch(() => "");
+    const hinweis = roh.length > 0 ? ` — ${entschaerfen(roh)}` : "";
+    throw new NeonFehler(antwort.status, pfad, hinweis);
   }
   return antwort.json();
 }
 
+/**
+ * Die Projekte, die dieser Schluessel sieht.
+ *
+ * Zwei Wege, weil Neon zwei Sorten Schluessel kennt:
+ *
+ * * Ein **Organisations**-Schluessel kennt seine Organisation selbst.
+ * * Ein **persoenlicher** Schluessel nicht. Fuer ihn braucht `/projects` den
+ *   Parameter `org_id` — und liegen die Projekte einer Organisation, ohne den
+ *   Parameter, antwortet Neon mit 404 statt mit einer leeren Liste.
+ *
+ * Genau das ist beim ersten Trockenlauf passiert. Deshalb wird der zweite Weg
+ * nicht geraten, sondern gegangen: erst ohne Parameter fragen, bei 404 die
+ * Organisationen des Schluessels holen und je Organisation nachfragen.
+ */
+async function projekteHolen(schluessel: string): Promise<Projekt[]> {
+  try {
+    const daten = await neon("/projects", schluessel) as { projects?: Projekt[] };
+    const projekte = daten.projects ?? [];
+    if (projekte.length > 0) return projekte;
+  } catch (fehler) {
+    if (!(fehler instanceof NeonFehler) || fehler.status !== 404) throw fehler;
+    // Ein projektgebundener Schluessel nennt beim Ablehnen sein Projekt. Dann
+    // ist die Frage „welches Projekt?" schon beantwortet, und jede weitere
+    // Anfrage waere nur ein weiteres 404.
+    const ausAbsage = projektAusAbsage(fehler.message);
+    if (ausAbsage !== undefined) {
+      console.error(`  Schlüssel ist an ein Projekt gebunden: ${ausAbsage}`);
+      return [{ id: ausAbsage, name: ausAbsage }];
+    }
+    console.error("  /projects ohne org_id: 404 — versuche es je Organisation.");
+  }
+
+  const orgs = await neon("/users/me/organizations", schluessel) as
+    { organizations?: Organisation[] };
+  const liste = orgs.organizations ?? [];
+  if (liste.length === 0) {
+    throw new Error(
+      "Der Schlüssel sieht weder Projekte noch Organisationen. "
+      + "Er gehört vermutlich zu einem anderen Konto als das Neon-Projekt.",
+    );
+  }
+  console.error(`  ${liste.length} Organisation(en): ${liste.map((o) => o.name).join(", ")}`);
+
+  const gesammelt: Projekt[] = [];
+  for (const org of liste) {
+    try {
+      const daten = await neon(
+        `/projects?org_id=${encodeURIComponent(org.id)}`,
+        schluessel,
+      ) as { projects?: Projekt[] };
+      gesammelt.push(...(daten.projects ?? []));
+    } catch (fehler) {
+      if (!(fehler instanceof NeonFehler) || fehler.status !== 404) throw fehler;
+      const ausAbsage = projektAusAbsage(fehler.message);
+      if (ausAbsage === undefined) throw fehler;
+      console.error(`  Schlüssel ist an ein Projekt gebunden: ${ausAbsage}`);
+      return [{ id: ausAbsage, name: ausAbsage }];
+    }
+  }
+  return gesammelt;
+}
+
 async function projektWaehlen(schluessel: string): Promise<Projekt> {
   const gewuenscht = process.env["NEON_PROJECT_ID"]?.trim();
-  const daten = await neon("/projects", schluessel) as { projects?: Projekt[] };
-  const projekte = daten.projects ?? [];
+
+  // Steht die Kennung fest, ist die Liste ueberfluessig — und ein
+  // projektgebundener Schluessel darf sie ohnehin nicht abrufen. Die Liste
+  // dient dem Finden, nicht dem Arbeiten.
+  if (gewuenscht !== undefined && gewuenscht.length > 0) {
+    return { id: gewuenscht, name: gewuenscht };
+  }
+
+  const projekte = await projekteHolen(schluessel);
 
   if (projekte.length === 0) {
     throw new Error("Im Neon-Konto liegt kein Projekt.");
-  }
-  if (gewuenscht !== undefined && gewuenscht.length > 0) {
-    const treffer = projekte.find((p) => p.id === gewuenscht);
-    if (treffer === undefined) {
-      throw new Error(`NEON_PROJECT_ID zeigt auf ein Projekt, das es nicht gibt.`);
-    }
-    return treffer;
   }
   if (projekte.length > 1) {
     // Raten waere hier besonders schlecht: die Migration legt Tabellen an,
