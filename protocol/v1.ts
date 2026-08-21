@@ -13,8 +13,8 @@
  *
  * Warum ab v1 versioniert: das Protokoll wird gespeichert und Monate später
  * wieder angezeigt. Ein gespeichertes Protokoll ohne Versionsangabe lässt sich
- * nach der ersten Schemaänderung nicht mehr sicher lesen — man rät dann, welche
- * Fassung gemeint war.
+ * nach der ersten Schemaänderung nicht mehr zuverlässig lesen — man rät dann,
+ * welche Fassung gemeint war.
  */
 
 import { z } from "zod";
