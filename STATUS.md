@@ -10,7 +10,8 @@ Stand: M0 abgeschlossen. 61 Tests, Lint und Typprüfung grün.
 | `core/schnittstellen.ts` | `Angreifer`, `Fixer`, `Ziel`, `Laufzeit`, `Kostenzaehler`. |
 | `core/orchestrator.ts` | Die Schleife: angreifen → fixen → **alles** erneut prüfen. Abbruch bei keine offenen Befunde / Rundenlimit / Kostendeckel. Standard 3 Runden. |
 | `attackers/` | Drei statische Angreifer: Zugangsdaten, RLS, Auth an Route Handlern. |
-| CI | Lint, Typprüfung, Tests. Zweiter Lauf: keine Zugangsdaten in neuen Zeilen eines PR. |
+| `config/zugaenge.ts` | Eine Stelle, an der Zugänge gelesen werden. Wirft klar, wenn einer fehlt; gibt nie einen Wert in eine Meldung. |
+| CI | Drei Läufe: (1) Lint, Typprüfung, Tests, Zugangsübersicht. (2) Keine Zugangsdaten in neuen Zeilen eines PR. (3) Keine Sicherheitszusagen im Text. |
 
 ## Was ein Nutzer davon merkt
 
@@ -91,17 +92,29 @@ eintragen.
 
 ## Was in den GitHub Secrets liegen muss
 
-M0 ruft kein Modell auf — die Angreifer arbeiten statisch. Die CI reicht diese
-beiden trotzdem schon durch, damit sie an einer Stelle stehen, wenn M1 sie
-braucht:
+**Stand: keines davon ist hinterlegt.** Nachprüfbar mit `npm run zugaenge` —
+der Lauf gibt „gesetzt / nicht gesetzt" aus, nie einen Wert. Er läuft auch in
+der CI mit und färbt den Lauf nicht rot, denn in M0 braucht kein Schritt einen
+Zugang.
 
-| Secret | Wofür |
-|---|---|
-| `NVIDIA_API_KEY` | Modellzugang (CLAUDE.md §3) |
-| `NVIDIA_BASE_URL` | Endpunkt der Modelle |
+| Secret | Wofür | Geheim |
+|---|---|---|
+| `NVIDIA_API_KEY` | Zugang zu den Modell-Endpunkten | ja |
+| `NVIDIA_BASE_URL` | Endpunkt; ohne Angabe `https://integrate.api.nvidia.com/v1` | nein |
+| `NVIDIA_MODEL` | Modell; ohne Angabe `moonshotai/kimi-k2-instruct` | nein |
+| `NEON_API_KEY` | Datenbank je Lauf anlegen (Branching, §3) | ja |
+| `DATABASE_URL` | Verbindung zur Datenbank des Backends | ja |
 
-Noch nicht gebraucht, aber absehbar: `NEON_API_KEY` (Datenbank je Lauf),
-`VERCEL_TOKEN` (Control Plane), `STRIPE_SECRET_KEY` (Zahlungen).
+Hinterlegt werden sie unter **Settings → Secrets and variables → Actions →
+New repository secret**. Die Namen stehen in `config/zugaenge.ts` und in
+`.env.example`.
+
+**Keine `.env` im Repo.** Sie steht in `.gitignore`, und `.env.example` enthält
+nur Namen. Wer eine `.env` mit Werten anlegt, hat sie irgendwann versehentlich
+committet — und dann greift §2.4 (Key im Diff = Abbruchgrund), nachdem der
+Schlüssel bereits verbrannt ist.
+
+Später absehbar: `VERCEL_TOKEN` (Control Plane), `STRIPE_SECRET_KEY` (Zahlungen).
 
 ## Nächster Schritt
 
