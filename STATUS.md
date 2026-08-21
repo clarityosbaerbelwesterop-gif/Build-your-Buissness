@@ -1,6 +1,6 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: M0 abgeschlossen. 61 Tests, Lint und Typprüfung grün.
+Stand: M0 abgeschlossen. 108 Tests, Lint und Typprüfung grün.
 
 ## Was steht
 
@@ -96,10 +96,13 @@ eintragen.
 
 ## Was in den GitHub Secrets liegen muss
 
-**Stand: keines davon ist hinterlegt.** Nachprüfbar mit `npm run zugaenge` —
-der Lauf gibt „gesetzt / nicht gesetzt" aus, nie einen Wert. Er läuft auch in
-der CI mit und färbt den Lauf nicht rot, denn in M0 braucht kein Schritt einen
-Zugang.
+**Stand: `NEON_API_KEY` und `NV_API_KEY_1/2/3` sind hinterlegt** (deine
+Angabe). Nachgeprüft ist es nicht von mir — ich kann Secrets weder lesen noch
+setzen. Was nachprüft, ist `npm run zugaenge`: der Lauf gibt je Zugang
+„gesetzt / nicht gesetzt" aus, nie einen Wert, und läuft in jedem CI-Lauf mit.
+Die Zeile im Protokoll des letzten Laufs ist der Beleg, nicht dieser Absatz.
+
+Rot färbt er den Lauf nicht, denn in M0 braucht kein Schritt einen Zugang.
 
 | Secret | Wofür | Geheim |
 |---|---|---|
