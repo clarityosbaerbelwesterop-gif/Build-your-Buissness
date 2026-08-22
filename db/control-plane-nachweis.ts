@@ -186,7 +186,12 @@ try {
     throw new Error("Die Worker-Rolle darf nicht auf bestehende Protokolle zugreifen.");
   }
 
-  const lease1 = await naechsteAktionLeasen(db, "nachweis-worker", 100, 1_780_000_000_000);
+  const lease1 = await naechsteAktionLeasen(
+    db,
+    "nachweis-worker",
+    3_000,
+    1_780_000_000_000,
+  );
   if (lease1 === undefined || lease1.auftragId !== a.id || lease1.aktionId !== "code") {
     throw new Error("Die erste autonome Aktion wurde nicht korrekt geleast.");
   }
@@ -194,14 +199,14 @@ try {
   const waehrendAktiverLease = await naechsteAktionLeasen(
     db,
     "nachweis-worker-2",
-    100,
+    3_000,
     1_780_000_000_010,
   );
   if (waehrendAktiverLease !== undefined) {
     throw new Error("Eine aktive Lease wurde doppelt vergeben oder eine Freigabegrenze ignoriert.");
   }
 
-  await warten(160);
+  await warten(3_200);
   const lease2 = await naechsteAktionLeasen(
     db,
     "nachweis-worker-2",
