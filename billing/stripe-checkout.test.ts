@@ -54,8 +54,9 @@ describe("BYB Stripe Checkout", () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(antwort());
     await checkoutAnlegen({ art: "abo", planKey: "pro", stripeSecret: secret, nutzerId: "u", basisUrl: "https://preview.example.com", fetcher });
     const [url, init] = fetcher.mock.calls[0] ?? [];
-    expect(String(url)).not.toContain(secret);
-    expect(String(init?.body)).not.toContain(secret);
+    expect(url).toBe("https://api.stripe.com/v1/checkout/sessions");
+    expect(init?.body).toBeInstanceOf(URLSearchParams);
+    expect((init?.body as URLSearchParams).toString()).not.toContain(secret);
     expect((init?.headers as Record<string, string>).authorization).toBe(`Bearer ${secret}`);
   });
 });
