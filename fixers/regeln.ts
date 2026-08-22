@@ -1,17 +1,15 @@
 /**
  * Regelbasierte Fixer fuer die drei statischen Angriffsklassen aus M0.
  *
- * Grundsatz: nur aendern, wenn die richtige Transformation aus dem Fund und
- * dem vorhandenen Projekt ableitbar ist. Fehlt dafuer Kontext, bleibt der Fund
- * offen. Ein nicht ausgefuehrter Fix ist billiger als erfundene Auth- oder
- * Datenbanklogik.
+ * Nur Transformationen ausfuehren, die aus Fund und vorhandenem Projekt
+ * eindeutig ableitbar sind. Fehlt Kontext, bleibt der Befund offen.
  */
 
 import { posix } from "node:path";
 
-import type { Befund } from "../protocol/v1.js";
-import type { Datei, Fixer, FixVersuch, Ziel } from "../core/schnittstellen.js";
 import { zugangsdatenTreffer } from "../attackers/zugangsdaten-muster.js";
+import type { Datei, Fixer, FixVersuch, Ziel } from "../core/schnittstellen.js";
+import type { Befund } from "../protocol/v1.js";
 
 const CODE_DATEI = /\.[cm]?[jt]sx?$/i;
 
@@ -27,12 +25,11 @@ function fundDatei(befund: Befund, ziel: Ziel): Datei | undefined {
 
 function envBeispiel(ziel: Ziel, name: string): Datei | undefined {
   const vorhanden = ziel.dateien.find((datei) => datei.pfad === ".env.example");
-  if (vorhanden === undefined) {
-    return { pfad: ".env.example", inhalt: `${name}=\n` };
-  }
+  if (vorhanden === undefined) return { pfad: ".env.example", inhalt: `${name}=\n` };
 
   const zeilen = vorhanden.inhalt.split("\n");
   if (zeilen.some((zeile) => zeile.trimStart().startsWith(`${name}=`))) return undefined;
+
   const trenner = vorhanden.inhalt.length === 0 || vorhanden.inhalt.endsWith("\n") ? "" : "\n";
   return { ...vorhanden, inhalt: `${vorhanden.inhalt}${trenner}${name}=\n` };
 }
@@ -62,8 +59,7 @@ function zugangsdatenFixen(befund: Befund, ziel: Ziel): FixVersuch {
   }
 
   const ersatz = `process.env.${treffer.regel.umgebungsvariable}`;
-  const neu =
-    datei.inhalt.slice(0, treffer.start - 1)
+  const neu = datei.inhalt.slice(0, treffer.start - 1)
     + ersatz
     + datei.inhalt.slice(treffer.ende + 1);
   const dateien: Datei[] = [{ ...datei, inhalt: neu }];
@@ -83,11 +79,15 @@ function tabellennameAusNachweis(nachweis: string): string | undefined {
   return /:\d+\s{2}([a-z_][a-z0-9_]*)\s{2}—/i.exec(nachweis)?.[1];
 }
 
+function regexText(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function createTableEnde(sql: string, tabelle: string): number | undefined {
-  const start = new RegExp(
-    `create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?["\\`]?${tabelle}["\\`]?\\s*\\(`,
-    "i",
-  ).exec(sql);
+  const muster = "create\\s+table\\s+(?:if\\s+not\\s+exists\\s+)?[\"`]?"
+    + regexText(tabelle)
+    + "[\"`]?\\s*\\(";
+  const start = new RegExp(muster, "i").exec(sql);
   if (start === null) return undefined;
 
   let tiefe = 0;
@@ -118,8 +118,7 @@ function rlsFixen(befund: Befund, ziel: Ziel): FixVersuch {
     if (ende === undefined) {
       return ohneAenderung("Die CREATE-TABLE-Anweisung konnte nicht eindeutig begrenzt werden.");
     }
-    const block =
-      `\nalter table ${tabelle} enable row level security;`
+    const block = `\nalter table ${tabelle} enable row level security;`
       + `\nalter table ${tabelle} force row level security;`;
     return {
       geaendert: true,
@@ -129,10 +128,10 @@ function rlsFixen(befund: Befund, ziel: Ziel): FixVersuch {
   }
 
   if (befund.nachweis.includes("ENABLE ohne FORCE ROW LEVEL SECURITY")) {
-    const enable = new RegExp(
-      `(alter\\s+table\\s+["\\`]?${tabelle}["\\`]?\\s+enable\\s+row\\s+level\\s+security\\s*;)`,
-      "i",
-    );
+    const muster = "(alter\\s+table\\s+[\"`]?"
+      + regexText(tabelle)
+      + "[\"`]?\\s+enable\\s+row\\s+level\\s+security\\s*;)";
+    const enable = new RegExp(muster, "i");
     if (!enable.test(datei.inhalt)) {
       return ohneAenderung("Die vorhandene ENABLE-Anweisung konnte nicht eindeutig gefunden werden.");
     }
@@ -158,10 +157,9 @@ function rlsFixen(befund: Befund, ziel: Ziel): FixVersuch {
         "Eine Policy wird nur automatisch erzeugt, wenn die Tabelle nutzer_id nutzt und auth.nutzer_kennung() im Schema vorhanden ist.",
       );
     }
-    const policy =
-      `\ncreate policy ${tabelle}_eigene on ${tabelle} for all\n`
-      + `  using      (nutzer_id = auth.nutzer_kennung())\n`
-      + `  with check (nutzer_id = auth.nutzer_kennung());\n`;
+    const policy = `\ncreate policy ${tabelle}_eigene on ${tabelle} for all\n`
+      + "  using      (nutzer_id = auth.nutzer_kennung())\n"
+      + "  with check (nutzer_id = auth.nutzer_kennung());\n";
     return {
       geaendert: true,
       beschreibung: `Mandanten-Policy fuer ${tabelle} auf nutzer_id ergaenzt.`,
