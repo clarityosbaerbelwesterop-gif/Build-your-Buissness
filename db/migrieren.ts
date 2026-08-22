@@ -20,6 +20,7 @@ const ERLAUBTE_MIGRATIONEN = new Set([
   "001_grundschema.sql",
   "002_protokoll_inhalt.sql",
   "003_control_plane.sql",
+  "004_connector_hub.sql",
 ]);
 
 function migrationsdatei(): string {
