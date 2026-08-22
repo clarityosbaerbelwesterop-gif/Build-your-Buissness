@@ -88,6 +88,8 @@ export type BillingBefehl =
       readonly eventTyp: string;
     };
 
+type AboStatus = Extract<BillingBefehl, { art: "abo_status" }>["status"];
+
 function bybNutzer(metadata: Record<string, string> | undefined, clientReference?: string | null): string {
   if (metadata?.application !== "byb") throw new Error("Stripe-Objekt gehört nicht zu BYB.");
   const wert = metadata.nutzer_id ?? clientReference;
@@ -97,7 +99,7 @@ function bybNutzer(metadata: Record<string, string> | undefined, clientReference
   return wert;
 }
 
-function aboStatus(status: z.infer<typeof Subscription>["status"]): BillingBefehl & { art: "abo_status" }["status"] {
+function aboStatus(status: z.infer<typeof Subscription>["status"]): AboStatus {
   if (status === "incomplete" || status === "incomplete_expired") return "inaktiv";
   return status;
 }
