@@ -1,14 +1,22 @@
 /**
  * RLS-Nachweis gegen einen frischen Neon-Zweig.
  *
- * Ablauf: Zweig anlegen → Migration anwenden → Mandantentrennung prüfen →
- * Gegenprobe → **Zweig löschen, in jedem Fall**.
+ * Ablauf: Zweig anlegen → geerbtes BYB-Schema auf diesem Testzweig entfernen →
+ * Migration anwenden → Mandantentrennung prüfen → Gegenprobe → **Zweig löschen,
+ * in jedem Fall**.
  *
  * Warum ein eigener Zweig und nicht die vorhandene Datenbank: die Prüfung legt
  * Zeilen an, ändert und löscht. CLAUDE.md §2.3 lässt das nur gegen etwas zu,
  * das im selben Lauf entstanden ist — „nie gegen Produktion, nie gegen etwas
  * mit echten Nutzerdaten". Ein Zweig bei Neon kostet Sekunden; die Regel
  * dafür zu beugen kostet irgendwann Kundendaten.
+ *
+ * Neon-Zweige erben den Stand ihres Elternzweigs. Deshalb ist „frischer Zweig"
+ * nicht dasselbe wie „leere Datenbank": ohne den Reset unten würde die
+ * Migration gegen bereits vorhandene Tabellen und Policies laufen. Der Reset
+ * löscht ausschließlich die vier BYB-Tabellen auf dem gerade erzeugten
+ * Testzweig. Danach beweist der Lauf sowohl die Migration als auch die Policies
+ * aus dem aktuellen PR statt nur den bereits deployten Stand des Elternzweigs.
  *
  * Warum kein vitest: der Zweig muss auch dann verschwinden, wenn mitten in der
  * Prüfung etwas wirft. Ein `finally` um den ganzen Ablauf ist dafür
@@ -35,6 +43,18 @@ const SCHEMA = readFileSync(
 
 /** Die vier Tabellen mit Mandantenbezug — dieselben wie in der Migration. */
 const TABELLEN = ["laeufe", "protokolle", "befunde", "runden"] as const;
+
+/**
+ * Neon kopiert beim Branching auch das vorhandene Schema. Für den Nachweis
+ * brauchen wir aber den Zustand „vor dieser Migration". Gelöscht wird nur auf
+ * dem im selben Lauf angelegten Zweig und nur das eigene BYB-Grundschema.
+ */
+const RESET_EIGENES_SCHEMA = `
+  drop table if exists runden cascade;
+  drop table if exists befunde cascade;
+  drop table if exists protokolle cascade;
+  drop table if exists laeufe cascade;
+`;
 
 /**
  * Wie man in jeder Tabelle eine Zeile für einen Mandanten anlegt.
@@ -209,8 +229,10 @@ const klient = new Client({
 
 try {
   await klient.connect();
+  await klient.query(RESET_EIGENES_SCHEMA);
+  console.error("Geerbtes BYB-Grundschema auf dem Testzweig entfernt.");
   await klient.query(SCHEMA);
-  console.error("Schema auf dem Zweig angewendet.");
+  console.error("Schema aus dem aktuellen Branch auf dem Testzweig angewendet.");
 
   const alle: Verstoss[] = [];
   const eltern = new Map<string, { lauf: string; protokoll: string }>();
