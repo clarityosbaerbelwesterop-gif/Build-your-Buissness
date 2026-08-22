@@ -4,10 +4,6 @@ on:
   pull_request:
     paths:
       - ".github/workflows/dependency-refresh.yml"
-  push:
-    branches: [m05-fixer-und-nachweise]
-    paths:
-      - ".github/workflows/dependency-refresh.yml"
 
 permissions:
   contents: write
@@ -23,10 +19,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
-      - name: Gepatchte Vitest-Linie eintragen
-        run: npm install --save-dev vitest@4.1.10
+      - name: Gepatchte Test-Abhaengigkeiten sauber aufloesen
+        run: |
+          set -euo pipefail
+          npm pkg set devDependencies.vitest=4.1.10
+          rm package-lock.json
+          npm install --package-lock-only --ignore-scripts
+          npm ci
 
       - name: Lint
         run: npm run lint
@@ -47,5 +47,5 @@ jobs:
             echo "Keine Aenderung noetig."
             exit 0
           fi
-          git commit -m "chore: aktualisiere Vitest auf gepatchte Version"
+          git commit -m "chore: aktualisiere Test-Abhaengigkeiten"
           git push origin HEAD:m05-fixer-und-nachweise
