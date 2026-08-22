@@ -36,6 +36,7 @@ const LeaseZeile = z.object({
 
 export interface AktionsLease {
   readonly auftragId: string;
+  readonly projektId: string;
   readonly aktionId: string;
   readonly nutzerId: string;
   readonly leaseToken: string;
@@ -292,6 +293,7 @@ async function leaseSetzen(
   const zeile = LeaseZeile.parse(roh);
   return {
     auftragId: auftrag.id,
+    projektId: auftrag.projekt_id,
     aktionId,
     nutzerId: auftrag.nutzer_id,
     leaseToken: zeile.lease_token,
@@ -306,9 +308,12 @@ export async function naechsteAktionLeasen(
   workerIdRoh: string,
   leaseDauerMsRoh = 60_000,
   zeitstempel = Date.now(),
+  erlaubteTypenRoh?: readonly Aktion["typ"][],
 ): Promise<AktionsLease | undefined> {
   const workerId = Kennung.parse(workerIdRoh);
   const leaseDauerMs = LeaseDauer.parse(leaseDauerMsRoh);
+  const erlaubteTypen = erlaubteTypenRoh === undefined ? undefined : new Set(erlaubteTypenRoh);
+  if (erlaubteTypen?.size === 0) return undefined;
 
   return mitWorkerTransaktion(verbindung, async (db) => {
     const kandidaten = await db.query(
@@ -323,17 +328,17 @@ export async function naechsteAktionLeasen(
     for (const roh of kandidaten.rows) {
       const zeile = AuftragZeile.parse(roh);
       const vorher = Auftrag.parse(zeile.inhalt);
-
+      const typBedingung = erlaubteTypen === undefined ? "" : " and typ = any($2::text[])";
       const abgelaufen = await db.query(
         `select aktion_id
            from steuer_aktionen
           where auftrag_id = $1
             and zustand = 'laeuft'
             and lease_bis is not null
-            and lease_bis <= now()
+            and lease_bis <= now()${typBedingung}
           order by aktualisiert asc
           limit 1`,
-        [vorher.id],
+        erlaubteTypen === undefined ? [vorher.id] : [vorher.id, [...erlaubteTypen]],
       );
       const abgelaufeneZeile = abgelaufen.rows[0];
 
@@ -344,7 +349,9 @@ export async function naechsteAktionLeasen(
         return leaseSetzen(db, nachher, aktionId, workerId, leaseDauerMs, true);
       }
 
-      const naechste = naechsteAktionen(vorher)[0];
+      const naechste = naechsteAktionen(vorher).find(
+        (aktion) => erlaubteTypen === undefined || erlaubteTypen.has(aktion.typ),
+      );
       if (naechste === undefined) continue;
       const nachher = aktionStarten(vorher, naechste.id, zeitstempel);
       await aggregateAktualisieren(db, vorher, nachher);

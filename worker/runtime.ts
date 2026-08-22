@@ -46,11 +46,13 @@ export async function workerEinmalAusfuehren(
 ): Promise<WorkerSchrittErgebnis> {
   const zeitstempel = optionen.zeitstempel ?? Date.now();
   const leaseDauerMs = optionen.leaseDauerMs ?? 60_000;
+  const erlaubteTypen = Object.keys(register) as Aktionstyp[];
   const lease = await naechsteAktionLeasen(
     db,
     optionen.workerId,
     leaseDauerMs,
     zeitstempel,
+    erlaubteTypen,
   );
   if (lease === undefined) return { status: "leer" };
 

@@ -25,6 +25,7 @@ const db = {
 function lease(): AktionsLease {
   return {
     auftragId: "auftrag-1",
+    projektId: "projekt-1",
     aktionId: "repo-vorbereiten",
     nutzerId: "nutzer-1",
     leaseToken: "11111111-1111-4111-8111-111111111111",
@@ -52,13 +53,14 @@ describe("Worker-Runtime", () => {
     mocks.abschliessen.mockReset();
   });
 
-  it("beendet einen leeren Poll ohne Executor-Aufruf", async () => {
+  it("beendet einen leeren Poll ohne Executor-Aufruf und filtert auf registrierte Typen", async () => {
     mocks.leasen.mockResolvedValue(undefined);
     const executor = { ausfuehren: vi.fn() };
 
     await expect(
       workerEinmalAusfuehren(db, { repo: executor }, { workerId: "worker-1", zeitstempel: 1000 }),
     ).resolves.toEqual({ status: "leer" });
+    expect(mocks.leasen).toHaveBeenCalledWith(db, "worker-1", 60_000, 1000, ["repo"]);
     expect(executor.ausfuehren).not.toHaveBeenCalled();
     expect(mocks.erneuern).not.toHaveBeenCalled();
   });
@@ -81,6 +83,7 @@ describe("Worker-Runtime", () => {
       { workerId: "worker-1", leaseDauerMs: 60_000, zeitstempel: 1000 },
     );
 
+    expect(mocks.leasen).toHaveBeenCalledWith(db, "worker-1", 60_000, 1000, ["repo"]);
     expect(mocks.erneuern).toHaveBeenCalledWith(
       db,
       "auftrag-1",
@@ -101,17 +104,13 @@ describe("Worker-Runtime", () => {
     expect(ergebnis.status).toBe("abgeschlossen");
   });
 
-  it("führt eine Aktion ohne registrierten Executor nicht aus", async () => {
-    mocks.leasen.mockResolvedValue(lease());
+  it("reicht bei leerem Register eine leere Typmenge an die Queue weiter", async () => {
+    mocks.leasen.mockResolvedValue(undefined);
 
     await expect(
       workerEinmalAusfuehren(db, {}, { workerId: "worker-1", zeitstempel: 1000 }),
-    ).resolves.toEqual({
-      status: "kein_executor",
-      auftragId: "auftrag-1",
-      aktionId: "repo-vorbereiten",
-      typ: "repo",
-    });
+    ).resolves.toEqual({ status: "leer" });
+    expect(mocks.leasen).toHaveBeenCalledWith(db, "worker-1", 60_000, 1000, []);
     expect(mocks.erneuern).not.toHaveBeenCalled();
     expect(mocks.abschliessen).not.toHaveBeenCalled();
   });
