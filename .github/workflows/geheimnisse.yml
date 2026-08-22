@@ -8,11 +8,13 @@ name: Geheimnisse
 # .env — und der Wächter hat sie nie gesehen. Ein Wächter, der nur den
 # höflichen Weg bewacht, bewacht nichts.
 #
-# Zwei Prüfungen, und die zweite ist die wichtigere:
+# Zwei Prüfungen:
 #
-# 1. Neue Zeilen eines PR auf Schlüsselmuster.
-# 2. Der **ganze Baum** auf eine vorhandene .env — bei jedem Push, auch auf
-#    main. Muster können sich ändern; eine .env im Repo ist immer falsch.
+# 1. Der **ganze Baum** auf eine vorhandene .env — bei jedem Push, auch auf
+#    main. Eine .env im Repo ist unabhängig vom Inhalt falsch.
+# 2. Geänderte Dateien eines PRs werden dem **gleichen Angreifer** gegeben, den
+#    das Produkt benutzt (`attackers/zugangsdaten.ts`). Die Schlüsselmuster und
+#    Ausnahmen stehen damit nicht mehr doppelt in CI und Produkt.
 
 on:
   pull_request:
@@ -49,47 +51,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Neue Zeilen auf Zugangsdaten pruefen
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Geänderte Dateien mit Produkt-Angreifer prüfen
         run: |
           set -euo pipefail
           BASIS="origin/${{ github.base_ref }}"
           git fetch --quiet origin "${{ github.base_ref }}"
-
-          # Bewusst wenige, praezise Muster. Eine lange Liste vager Ausdruecke
-          # erzeugt Fehlalarme, und ein Waechter, dem niemand glaubt, wird
-          # uebergangen.
-          MUSTER='sk-[A-Za-z0-9]{20,}|nvapi-[A-Za-z0-9_-]{20,}|napi_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|postgres(ql)?://[^:]+:[^@[:space:]]+@'
-
-          # Testdateien und Beispiele sind ausgenommen — dort stehen Attrappen.
-          # Der Angreifer im Produkt (attackers/zugangsdaten.ts, NUR_BEISPIEL)
-          # kennt diese Ausnahme seit dem ersten Tag; dieser Waechter kannte sie
-          # nicht und hat prompt einen Testwert gemeldet. Zwei Pruefungen fuer
-          # dieselbe Frage, von denen eine die Regel kennt und die andere nicht,
-          # sind schlimmer als eine: die strengere gilt am Ende als kaputt.
-          #
-          # Dateiweise statt ueber den ganzen Diff, weil `git diff` den
-          # Dateinamen nur in der +++-Zeile nennt und nicht je Treffer.
-          GEFUNDEN=0
-          while IFS= read -r DATEI; do
-            [ -z "$DATEI" ] && continue
-            case "$DATEI" in
-              *.test.ts|*.test.tsx|*.spec.ts|*.spec.tsx|*.example|*.example.*|*.sample|*.sample.*)
-                continue ;;
-            esac
-            NEU=$(git diff "$BASIS"...HEAD --unified=0 -- "$DATEI" \
-                  | grep '^+' | grep -v '^+++' || true)
-            if echo "$NEU" | grep -Eq "$MUSTER"; then
-              # Nur der Dateiname, nie der Wert — dieses Protokoll ist fuer
-              # jeden lesbar, der Zugriff auf das Repository hat.
-              echo "  $DATEI"
-              GEFUNDEN=1
-            fi
-          done < <(git diff --name-only "$BASIS"...HEAD)
-
-          if [ "$GEFUNDEN" -eq 1 ]; then
-            echo
-            echo "Zugangsdaten in den neuen Zeilen der oben genannten Dateien."
-            echo "Keys gehoeren in GitHub Secrets, nicht in den Quelltext."
-            exit 1
-          fi
-          echo "Keine Zugangsdaten in den neuen Zeilen."
+          npx tsx attackers/zugangsdaten-ci.ts "$BASIS"
