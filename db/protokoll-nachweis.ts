@@ -75,21 +75,21 @@ let fehlgeschlagen = false;
 try {
   await klient.connect();
 
-  const alt = await klient.query("select count(*)::int as anzahl from protokolle where inhalt is null").catch(
-    () => ({ rows: [{ anzahl: 0 }] }),
+  const alt = await klient.query<{ anzahl: number }>(
+    "select count(*)::int as anzahl from protokolle",
   );
-  const anzahlAlt = alt.rows[0]?.["anzahl"];
-  if (typeof anzahlAlt === "number" && anzahlAlt > 0) {
+  const anzahlAlt = alt.rows[0]?.anzahl ?? 0;
+  if (anzahlAlt > 0) {
     throw new Error("Vorhandene Protokolle ohne kanonischen Inhalt blockieren M0.6.");
   }
 
   await klient.query(MIGRATION);
 
-  const rollen = await klient.query(
+  const rollen = await klient.query<{ rolcanlogin: boolean; rolbypassrls: boolean }>(
     "select rolcanlogin, rolbypassrls from pg_roles where rolname = 'byb_app'",
   );
   const rolle = rollen.rows[0];
-  if (rolle === undefined || rolle["rolcanlogin"] !== false || rolle["rolbypassrls"] !== false) {
+  if (rolle === undefined || rolle.rolcanlogin || rolle.rolbypassrls) {
     throw new Error("Die Laufzeitrolle byb_app hat unerwartete Rollenrechte.");
   }
 
