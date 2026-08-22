@@ -11,6 +11,10 @@ function env(name: string): string | undefined {
   return wert === "" ? undefined : wert;
 }
 
+function istGitHubNichtGefunden(fehler: unknown): boolean {
+  return fehler instanceof Error && /GitHub-Anfrage fehlgeschlagen \(404\)/.test(fehler.message);
+}
+
 const repo = env("GITHUB_REPOSITORY");
 const dauerhaft = env("BYB_GITHUB_LIVE_TOKEN");
 const kurzlebig = env("GITHUB_TOKEN");
@@ -56,14 +60,11 @@ try {
   if (zweig !== undefined) {
     await githubArbeitszweigLoeschen(api, zweig);
 
-    let existiertNoch = true;
     try {
       await api.ref(repo, zweig.branch);
-    } catch {
-      existiertNoch = false;
-    }
-    if (existiertNoch) {
       throw new Error("Der temporäre BYB-Arbeitsbranch konnte nicht vollständig entfernt werden.");
+    } catch (fehler) {
+      if (!istGitHubNichtGefunden(fehler)) throw fehler;
     }
     console.error(`Temporärer Branch gelöscht: ${zweig.branch}`);
   }
