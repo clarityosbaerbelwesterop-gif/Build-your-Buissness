@@ -1,213 +1,193 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M0.8 ist in PR #10 gebaut und nachgewiesen.**
+Stand: **M0.9 ist in PR #11 gebaut und gegen einen kurzlebigen Neon-Zweig nachgewiesen.**
 
 - M0.5 / PR #7 ist in `main` (`234dbe33`).
 - M0.6 / PR #8 ist in `main` (`8776c66d`).
 - M0.7 / PR #9 ist in `main` (`c5a7336a`).
-- M0.8 liegt auf `m08-control-plane`; PR #10 ist noch nicht gemergt.
-- Auf dem geprüften M0.8-Code-Head `2498cf21` sind CI, Geheimnisse, Sprache und
-  Backend-Nachweis grün.
-- CI: **17 Testdateien / 226 Tests**, Lint und TypeScript grün,
+- M0.8 / PR #10 ist in `main` (`95015e15`).
+- M0.9 liegt auf `m09-persistent-control-plane`.
+- Auf dem geprüften M0.9-Code-Head `54cab274` sind CI, Geheimnisse, Sprache,
+  RLS-Nachweis, Backend-Nachweis und der neue Control-Plane-Nachweis grün.
+- CI: **20 Testdateien / 237 Tests**, Lint und TypeScript grün,
   `npm audit --audit-level=high`: **0 bekannte Schwachstellen**.
 
-## Produktdefinition — korrigiert
-
-BYB ist nicht mehr als reines Prüfprodukt beschrieben.
+## Produktkern
 
 **Build your Buissness ist ein autonomer AI-Business-Operator.**
-
-Merksatz:
 
 > **Vom Repo bis zum Deploy bis zum Werbespot — BYB macht alles für dich.**
 
 Der Nutzer verbindet Systeme und wählt die Ressourcen, auf denen BYB arbeiten
-darf. Danach soll BYB Ziele in einen Aktionsgraph übersetzen und möglichst
-selbstständig bauen, verbinden, testen, veröffentlichen, beobachten und später
-optimieren.
-
-Das Prüfprotokoll bleibt wichtig, ist aber die **Audit-/Trust-Schicht** für
-Debug-/Security-Prüfungen und nicht das gesamte Produkt.
-
-`CLAUDE.md`, `CHATHUB.md` und `DESIGN-UI.md` bilden dieses Produktbild jetzt ab.
-Die ältere, widersprüchliche `Chathub.md` ist ausdrücklich als Legacy markiert.
+darf. BYB übersetzt ein Ziel in einen Aktionsgraph, führt freigegebene Arbeit
+möglichst autonom aus und dokumentiert Zustände, Ergebnisse, Kosten und
+Blockaden. Das Prüfprotokoll ist dabei Audit-/Trust-Layer, nicht das gesamte
+Produkt.
 
 ## Was technisch steht
 
 | Bereich | Stand |
 |---|---|
-| `models/` | NVIDIA-Modellzugriff mit Rollen, Zeitgrenzen und Retry-Verhalten. |
-| `core/orchestrator.ts` | Angreifen → fixen → Änderungen übernehmen → erneut prüfen. |
-| `attackers/` | Statische Prüfklassen für Zugangsdaten, RLS und Auth an Route-Handlern. |
-| `db/001_grundschema.sql` | BYB-Protokolltabellen mit RLS. |
-| `db/002_protokoll_inhalt.sql` | Kanonisches Protokoll-JSON und eingeschränkte Laufzeitrolle `byb_app`. |
-| `db/protokoll-speicher.ts` | Atomare, validierte Protokoll-Persistenz. |
+| `control-plane/v1.ts` | Vertrag für Projekte, Verbindungen, Aufträge, Aktionen, Freigaben, Credits und Activity Log. |
+| `control-plane/speicher.ts` | Persistiert den kanonischen Auftrag, projiziert Aktionen/Ereignisse und verwaltet Worker-Leases. |
+| `db/003_control_plane.sql` | RLS-geschützte Control-Plane-Tabellen plus eng begrenzte Worker-Rolle. |
+| `db/worker-kontext.ts` | Führt Hintergrundarbeit transaktional als `byb_worker` aus. |
+| `db/control-plane-nachweis.ts` | Echter Persistenz-/Lease-Nachweis auf einem kurzlebigen Neon-Zweig. |
 | `auth/neon-jwt.ts` | Kryptografische Neon-Auth-JWT-Prüfung über JWKS. |
-| `auth/protokoll-zugriff.ts` | Verifizierte Identität → RLS-gebundener Datenpfad. |
-| `control-plane/v1.ts` | Versionierter Vertrag für Ressourcen, Projekte, Aufträge, Aktionen, Freigaben, Credits und Activity Log. |
+| `db/protokoll-speicher.ts` | Atomare Persistenz des Debug-/Security-Protokolls. |
+| `core/orchestrator.ts` | Angreifen → fixen → Änderungen übernehmen → erneut prüfen. |
+| `models/` | NVIDIA-Modellzugriff mit Rollen, Zeitgrenzen und Retry-Verhalten. |
 
-## M0.8 — Control Plane v1
+## M0.9 — persistente Control Plane
 
-M0.8 bildet erstmals den eigentlichen BYB-Auftrag ab.
+### Kanonischer Auftrag und Projektionen
 
-### Verbindungen und Projekte
+`steuer_auftraege.inhalt` speichert den vollständigen Control-Plane-v1-Auftrag
+als kanonisches JSON. `steuer_aktionen` ist die relationale Projektion für
+Scheduling, Freigaben, Credits und Leases. `steuer_ereignisse` hält den
+Activity-Stream.
 
-Der Vertrag kennt aktuell:
+Alle drei Tabellen haben `ENABLE ROW LEVEL SECURITY` und `FORCE ROW LEVEL
+SECURITY`.
 
-- GitHub
-- Vercel
-- Neon
-- Supabase
-- Stripe
-- Google Search Console
-- Higgsfield
-- Meta Ads
-- TikTok Ads
+Der Nutzerpfad läuft als `byb_app` und bleibt über
+`nutzer_id = auth.nutzer_kennung()` mandantengebunden.
 
-Eine Verbindung speichert nur Konto-/Ressourcenreferenzen. Unbekannte Felder
-werden durch den strikten Zod-Vertrag abgelehnt; rohe Tokens oder Keys gehören
-nicht in den Control-Plane-Datensatz.
+### Hintergrundworker
 
-Ein Projekt wählt GitHub, Vercel und genau einen Backend-Anbieter: **Neon oder
-Supabase**. Das ist der Backend-Anbieter der vom Nutzer gebauten Anwendung; die
-interne BYB-Control-Plane-Persistenz darf davon unabhängig sein.
+Migration 003 führt `byb_worker` ein als:
 
-### Aufträge und Aktionen
+- `NOLOGIN`
+- `NOSUPERUSER`
+- `NOCREATEDB`
+- `NOCREATEROLE`
+- `NOINHERIT`
+- `NOBYPASSRLS`
 
-Ein Auftrag hat:
+Die Rolle erhält ausschließlich auf den neuen Control-Plane-Tabellen die für
+Scheduling nötigen Rechte und eigene explizite RLS-Policies. Sie erhält keine
+Rechte auf `laeufe`, `protokolle`, `befunde` oder `runden` und ist kein
+allgemeiner Service-Role-Ersatz.
 
-- Ziel
-- Aktionsgraph mit Abhängigkeiten
-- Aktionszustände
-- Verbindungsreferenzen je Aktion
-- geschätzte und tatsächliche Credits
-- Credit-Deckel
-- verständliches Activity Log
+### Leases und Wiederaufnahme
 
-Unterstützte Aktionsarten reichen bereits im Vertrag von Planung, Repo, Code,
-Backend, Auth, Payments und Tests bis Sandbox, Security, Fix, Deploy, Domain,
-Indexierung, Werbemittel, Ads und Monitoring. **Das bedeutet noch nicht, dass
-alle diese Connectoren implementiert sind.** Der Vertrag reserviert die Form,
-ohne Verfügbarkeit vorzutäuschen.
+`naechsteAktionLeasen()` sucht Aufträge mit `FOR UPDATE SKIP LOCKED`. Eine
+interne oder bereits freigegebene startbare Aktion wird atomar auf `laeuft`
+gesetzt und bekommt ein zufälliges Lease-Token, Ablaufzeit, Worker-ID und einen
+Versuchszähler.
 
-### Autonomie und Freigaben
+- Eine aktive Lease wird nicht doppelt vergeben.
+- Ein Worker kann seine Lease nur mit passendem, noch aktivem Token erneuern.
+- Nach Lease-Ablauf darf ein anderer Worker die laufende Aktion mit neuem Token
+  übernehmen.
+- Ein alter Worker kann mit seinem inzwischen ungültigen Token nicht mehr
+  abschließen.
+- Abschluss, tatsächliche Credits, Auftrag, Aktionsprojektion und Activity-Log
+  werden gemeinsam in einer Transaktion aktualisiert.
+- Freigaben werden ebenfalls unter Auftrags-Sperre persistent angewendet.
 
-Drei Klassen sind festgelegt:
+Damit ist die **Persistenz- und Koordinationsgrundlage** für „Fenster schließen
+und später weiterarbeiten“ vorhanden. Noch nicht vorhanden ist ein dauerhaft
+laufender Worker/Scheduler, der diese Leases selbstständig abholt und echte
+Connector-Aktionen ausführt.
 
-1. `intern` — keine Nutzerfreigabe nötig; z. B. Code/Tests innerhalb der
-   verbundenen Arbeitsressourcen.
-2. `extern` — z. B. Deploy/Domain; braucht Einzel- oder Dauerfreigabe.
-3. `finanziell` — z. B. Ads/Budget; braucht eine explizite Freigabe-/Budgetregel.
+## Echter Neon-Nachweis
 
-Eine Aktion startet nur, wenn:
+Der finale M0.9-Nachweis lief nur auf dem kurzlebigen Neon-Zweig
+`control-plane-nachweis-1787421239780` (`br-tiny-hall-b1h962ll`). Der Zweig wurde
+anschließend gelöscht.
 
-- sie geplant ist,
-- alle Abhängigkeiten erfolgreich sind,
-- ihre Freigabegrenze erfüllt ist,
-- die Credit-Schätzung in den Auftragsrahmen passt.
+Nachgewiesen wurden:
 
-Unbekannte, selbstreferenzielle und **zyklische** Abhängigkeiten werden
-abgelehnt. Nach Abschluss einer internen Aktion wechselt der Auftrag auf
-`wartet_freigabe`, wenn als Nächstes nur eine noch nicht freigegebene externe
-oder finanzielle Aktion möglich ist. Nach Freigabe kann die Control Plane
-weiterarbeiten.
+- zwei Nutzer speichern und lesen nur ihre eigenen Aufträge,
+- `byb_worker` ist `NOLOGIN`/`NOBYPASSRLS`,
+- `byb_worker` kann bestehende Protokolle nicht lesen,
+- aktive Leases werden nicht doppelt vergeben,
+- eine abgelaufene Lease wird mit neuem Token wieder aufgenommen,
+- der alte Worker-Token kann danach nicht mehr abschließen,
+- Lease-Erneuerung, Freigabe, Abschluss und tatsächliche Credits bleiben
+  persistent.
 
-### Nachweis auf PR #10, Head `2498cf21`
+Die Lease-Ablaufprüfung verwendet bewusst mehrere Sekunden statt eines
+Millisekunden-Rennens, damit Netzwerklatenz zwischen GitHub Runner und Neon den
+Nachweis nicht zufällig beeinflusst.
+
+## Verifikation auf M0.9-Code-Head `54cab274`
 
 - CI: grün
 - Lint: grün
 - TypeScript: grün
-- Vitest: **17 Dateien / 226 Tests grün**
-- davon `control-plane/v1.test.ts`: **11 Tests**
+- Vitest: **20 Dateien / 237 Tests grün**
+- davon Control-Plane-/Persistenz-Subset: **4 Dateien / 22 Tests grün**
 - `npm audit --audit-level=high`: **0 bekannte Schwachstellen**
 - Geheimnisse: grün
 - Sprache: grün
+- RLS-Nachweis: grün
 - Backend-Nachweis: grün
+- Control-Plane-Nachweis gegen echten kurzlebigen Neon-Zweig: grün
 
-Die neuen Tests decken insbesondere ab:
+Eine frühere CI-Runde in PR #11 war nur wegen drei Lint-Funden rot
+(`require-await` in zwei Test-Doubles und ein Type-only-Import). Diese Stellen
+wurden korrigiert; der aktuelle Code-Head ist grün.
 
-- Neon/Supabase-Auswahl
-- keine unbekannten/Token-Felder in Verbindungen
-- autonome interne Aktionen
-- Abhängigkeiten vor Ausführung
-- explizites Warten auf Freigabe
-- externe/finanzielle Freigabegrenzen
-- Credit-Deckel
-- Activity-Log und tatsächlichen Verbrauch
-- unbekannte, selbstreferenzielle und zyklische Aktionsabhängigkeiten
-- doppelte Aktions-IDs
+## Neon `production`
 
-## Neon `production` — unverändert
+M0.9 hat **keine Produktionsänderung** ausgeführt.
 
-Projekt: `damp-dream-67070160` (`Build your Buissness`), Default-Branch
-`production` (`br-patient-snow-b11ksdc8`).
+Bekannter Stand vor M0.9:
 
-M0.8 hat **keine Produktionsänderung** ausgeführt.
+- Neon Auth ist auf `production` bereits provisioniert.
+- Migration `002_protokoll_inhalt.sql` war noch nicht angewendet.
+- `byb_app` war dort noch nicht vorhanden.
 
-Bekannter Stand:
+Migration `003_control_plane.sql` wurde ebenfalls nicht auf `production`
+ausgeführt. Da 003 absichtlich die Rolle `byb_app` voraussetzt, muss bei einer
+späteren produktiven Freigabe zuerst der Zustand erneut read-only geprüft und
+dann 002 vor 003 angewendet werden. Das bleibt ein eigener produktiver Schritt.
 
-- `neon_auth` ist auf `production` bereits provisioniert.
-- Migration `002_protokoll_inhalt.sql` ist dort noch nicht angewendet.
-- Rolle `byb_app` existiert dort noch nicht.
-- Der M0.6/M0.7-Protokollpfad wird deshalb noch nicht produktiv verwendet.
+## Offen
 
-Vor einer späteren Migration 002 wird erneut read-only geprüft, ob bestehende
-Protokollzeilen die bewusst verlustfreie Migration blockieren würden.
+### 1. Worker-Runtime + erster echter Executor
 
-## Zugangsdaten und historischer Vorfall
+Die Queue kann Arbeit persistent koordinieren, aber noch kein dauerhaft
+laufender BYB-Worker führt Aktionen aus. Der nächste Produktkern ist deshalb
+ein Worker, der eine Lease nimmt, sie während langer Arbeit erneuert, genau
+eine Aktion ausführt und Ergebnis/Fehler zurückschreibt.
 
-Der aktuelle Baum enthält keine versionierte `.env`; Secret-Gates sind grün.
+Der erste Executor soll an der Kernkette beginnen:
 
-Am 21.08.2026 lagen echte NVIDIA-Schlüssel in drei früheren `main`-Commits. Die
-heute verwendeten Secrets sind andere Werte. Die alten Werte bleiben im
-Git-Verlauf; **ob sie beim Anbieter widerrufen wurden, ist weiterhin nicht
-verifiziert**. Eine History-Rewrite-Aktion bleibt separat und destruktiv.
+**GitHub → Backend (Neon/Supabase) → Vercel.**
 
-Keine Secret-Werte werden in Repo, Protokoll oder CI-Ausgabe übernommen.
+### 2. Fehlergrenzen des autonomen Workers
 
-## Noch offen
+Für produktiven Dauerbetrieb fehlen noch begrenzte Retries, Klassifikation von
+wiederholbaren/nicht wiederholbaren Fehlern und ein sichtbarer Dead-Letter-
+Zustand statt endloser Wiederaufnahme.
 
-### 1. Persistenz der Control Plane
+### 3. Credits/Billing
 
-M0.8 ist zunächst der versionierte Vertrag und seine Zustandslogik. Aufträge,
-Aktionen, Freigaben, Verbindungsreferenzen und Ereignisse werden noch nicht in
-der BYB-Datenbank gespeichert. Ohne persistente Zustände kann BYB noch nicht das
-Kernversprechen „Fenster schließen, BYB arbeitet weiter" erfüllen.
-
-### 2. Connector-Ausführung
-
-Die Anbieter sind modelliert, aber M0.8 führt noch keine GitHub-, Vercel-,
-Neon/Supabase-, Stripe-, Google-, Higgsfield- oder Ads-Aktion aus. Externe
-Writes kommen erst hinter dem Control-Plane-Vertrag und seinen Freigabegrenzen.
-
-### 3. Harte Credits/Billing
-
-M0.8 führt Credit-Schätzung, tatsächlichen Verbrauch und einen Auftragsdeckel.
-Ein echtes Abo-/Wallet-/Top-up-System sowie atomare Reservierung/Abbuchung sind
-noch nicht gebaut.
+Auftragsdeckel und tatsächlicher Verbrauch sind im Vertrag und persistenten
+Zustand vorhanden. Ein echtes Abo-/Wallet-/Top-up-System sowie atomare
+Reservierung/Abbuchung gegen parallele Worker fehlen noch.
 
 ### 4. Sandbox-Laufzeit
 
-Weiter offen. Bis zur Entscheidung laufen keine dynamischen Angriffe gegen eine
-echte isolierte App-Instanz.
+Weiter offen. Dynamische Debug-/Security-Angriffe gegen eine isoliert laufende
+Kunden-App brauchen weiterhin eine Runtime-Entscheidung.
 
-### 5. CI-Wartung
+### 5. Historische Zugangsdaten und CI-Wartung
 
-Die Gates sind grün, aber GitHub warnt weiterhin, dass `actions/checkout@v4` und
-`actions/setup-node@v4` Node 20 targeten und vom Runner auf Node 24 gehoben
-werden. ESLint 9.39.5 meldet ebenfalls eine Support-Warnung. Das sind aktuell
-keine Gate-Fehler, aber ein späterer Wartungsschritt.
+Frühere NVIDIA-Werte liegen weiterhin im Git-Verlauf; ihr Anbieter-Widerruf ist
+nicht verifiziert. Zusätzlich bestehen nur Wartungswarnungen für
+`actions/checkout@v4`, `actions/setup-node@v4`, ESLint 9.39.5 und eine angekündigte
+Änderung der `pg`-SSL-Modus-Semantik. Aktuell ist davon kein Gate rot.
 
-## Nächster Schritt nach Merge von PR #10
+## Nächster Schritt nach Merge von PR #11
 
-**M0.9: persistente Control Plane für Hintergrundarbeit.**
+**M1.0: Worker-Runtime + erster GitHub-Executor.**
 
-Ziel: die M0.8-Verträge in einer RLS-geschützten BYB-Persistenz ablegen und
-atomare Zustandsübergänge/Leases schaffen, damit ein Auftrag nach einem Request
-weitergeführt, wieder aufgenommen und im Chathub als Activity Stream gelesen
-werden kann.
-
-Erst darauf sollte der erste echte Connector-Executor folgen, beginnend mit der
-Kernkette **GitHub → Backend (Neon/Supabase) → Vercel**. So sitzt jeder externe
-Write von Anfang an hinter einem persistenten Auftrag, einer Freigabegrenze und
-einem nachvollziehbaren Ereignis.
+Ein Cloud-Worker soll eine persistierte Aktion leasen, einen GitHub-Arbeitsbranch
+für ein ausgewähltes Repo bearbeiten, Lease-Erneuerung und Fehlergrenzen nutzen
+und sein Ergebnis wieder in Auftrag/Activity-Log schreiben. Noch keine
+Production-Deployments. Danach wird derselbe Executor-Rahmen um Backend
+(Neon/Supabase) und Vercel erweitert.

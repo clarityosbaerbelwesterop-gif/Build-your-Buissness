@@ -1,0 +1,36 @@
+name: Control-Plane-Nachweis
+
+# M0.9 beweist Persistenz, RLS und Worker-Leases gegen einen kurzlebigen
+# Neon-Zweig. Produktion wird nicht verändert; der Testzweig wird im finally
+# des Nachweisskripts wieder gelöscht.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "control-plane/**"
+      - "db/**"
+      - "package.json"
+      - ".github/workflows/control-plane.yml"
+
+jobs:
+  nachweis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Control-Plane-Logik testen
+        run: npx vitest run control-plane db/control-plane-schema.test.ts db/worker-kontext.test.ts
+
+      - name: Persistenz und Leases gegen frischen Neon-Zweig
+        run: npm run controlplane:nachweis
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_DATABASE: ${{ secrets.NEON_DATABASE }}
+          NEON_ROLE: ${{ secrets.NEON_ROLE }}

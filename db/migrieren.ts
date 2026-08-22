@@ -19,6 +19,7 @@ import { neon, projektWaehlen } from "./neon-api.js";
 const ERLAUBTE_MIGRATIONEN = new Set([
   "001_grundschema.sql",
   "002_protokoll_inhalt.sql",
+  "003_control_plane.sql",
 ]);
 
 function migrationsdatei(): string {
