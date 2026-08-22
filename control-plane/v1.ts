@@ -204,6 +204,30 @@ export const Ereignis = z
   .strict();
 export type Ereignis = z.infer<typeof Ereignis>;
 
+function graphHatZyklus(aktionen: readonly Aktion[]): boolean {
+  const nachId = new Map(aktionen.map((aktion) => [aktion.id, aktion]));
+  const fertig = new Set<string>();
+  const pfad = new Set<string>();
+
+  const besuchen = (id: string): boolean => {
+    if (pfad.has(id)) return true;
+    if (fertig.has(id)) return false;
+
+    const aktion = nachId.get(id);
+    if (aktion === undefined) return false;
+
+    pfad.add(id);
+    for (const abhaengigkeit of aktion.abhaengigkeiten) {
+      if (besuchen(abhaengigkeit)) return true;
+    }
+    pfad.delete(id);
+    fertig.add(id);
+    return false;
+  };
+
+  return aktionen.some((aktion) => besuchen(aktion.id));
+}
+
 export const Auftrag = z
   .object({
     version: z.literal(CONTROL_PLANE_VERSION),
@@ -231,9 +255,11 @@ export const Auftrag = z
       ids.add(aktion.id);
     }
 
+    let alleAbhaengigkeitenGueltig = true;
     for (const [index, aktion] of auftrag.aktionen.entries()) {
       for (const abhaengigkeit of aktion.abhaengigkeiten) {
         if (abhaengigkeit === aktion.id || !ids.has(abhaengigkeit)) {
+          alleAbhaengigkeitenGueltig = false;
           kontext.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["aktionen", index, "abhaengigkeiten"],
@@ -241,6 +267,14 @@ export const Auftrag = z
           });
         }
       }
+    }
+
+    if (alleAbhaengigkeitenGueltig && graphHatZyklus(auftrag.aktionen)) {
+      kontext.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["aktionen"],
+        message: "Der Aktionsgraph darf keinen Zyklus enthalten.",
+      });
     }
   });
 export type Auftrag = z.infer<typeof Auftrag>;
@@ -268,15 +302,43 @@ function abhaengigkeitenErfuellt(auftrag: Auftrag, aktion: Aktion): boolean {
   );
 }
 
+function creditRahmenReicht(auftrag: Auftrag, aktion: Aktion): boolean {
+  return auftrag.credits_verbraucht + aktion.credits_geschaetzt <= auftrag.credit_deckel;
+}
+
 export function aktionStartbar(auftrag: Auftrag, aktion: Aktion): boolean {
   if (aktion.zustand !== "geplant") return false;
   if (!freigabeReicht(aktion)) return false;
   if (!abhaengigkeitenErfuellt(auftrag, aktion)) return false;
-  return auftrag.credits_verbraucht + aktion.credits_geschaetzt <= auftrag.credit_deckel;
+  return creditRahmenReicht(auftrag, aktion);
 }
 
 export function naechsteAktionen(auftrag: Auftrag): readonly Aktion[] {
   return auftrag.aktionen.filter((aktion) => aktionStartbar(auftrag, aktion));
+}
+
+export function auftragszustandAbleiten(auftrag: Auftrag): Auftragszustand {
+  const offen = auftrag.aktionen.filter(
+    (aktion) => aktion.zustand !== "erfolgreich" && aktion.zustand !== "uebersprungen",
+  );
+  if (offen.length === 0) return "abgeschlossen";
+  if (offen.some((aktion) => aktion.zustand === "laeuft")) return "laeuft";
+
+  const bereitNachAbhaengigkeiten = offen.filter(
+    (aktion) => aktion.zustand === "geplant" && abhaengigkeitenErfuellt(auftrag, aktion),
+  );
+
+  if (bereitNachAbhaengigkeiten.some(
+    (aktion) => freigabeReicht(aktion) && creditRahmenReicht(auftrag, aktion),
+  )) {
+    return "laeuft";
+  }
+
+  if (bereitNachAbhaengigkeiten.some((aktion) => !freigabeReicht(aktion))) {
+    return "wartet_freigabe";
+  }
+
+  return "pausiert";
 }
 
 function ereignisId(auftrag: Auftrag, zeitstempel: number): string {
@@ -310,9 +372,10 @@ export function freigabeErteilen(
       : eintrag,
   );
 
+  const zwischenstand = Auftrag.parse({ ...auftrag, aktionen });
   return Auftrag.parse({
-    ...auftrag,
-    aktionen,
+    ...zwischenstand,
+    zustand: auftragszustandAbleiten(zwischenstand),
     ereignisse: [
       ...auftrag.ereignisse,
       {
@@ -382,16 +445,16 @@ export function aktionAbschliessen(
         }
       : eintrag,
   );
-
-  const alleFertig = aktionen.every((eintrag) =>
-    ["erfolgreich", "uebersprungen"].includes(eintrag.zustand),
-  );
+  const neuerVerbrauch = auftrag.credits_verbraucht + creditsVerbraucht;
+  const zwischenstand = Auftrag.parse({
+    ...auftrag,
+    credits_verbraucht: neuerVerbrauch,
+    aktionen,
+  });
 
   return Auftrag.parse({
-    ...auftrag,
-    zustand: alleFertig ? "abgeschlossen" : "laeuft",
-    credits_verbraucht: auftrag.credits_verbraucht + creditsVerbraucht,
-    aktionen,
+    ...zwischenstand,
+    zustand: auftragszustandAbleiten(zwischenstand),
     ereignisse: [
       ...auftrag.ereignisse,
       {
