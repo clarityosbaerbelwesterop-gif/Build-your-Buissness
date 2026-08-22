@@ -1,0 +1,40 @@
+name: Connector-Persistenz-Nachweis
+
+on:
+  pull_request:
+    paths:
+      - "connector-hub/**"
+      - "db/002_protokoll_inhalt.sql"
+      - "db/003_control_plane.sql"
+      - "db/004_connector_hub.sql"
+      - "db/connector-hub-nachweis.ts"
+      - "db/connector-hub-schema.test.ts"
+      - "db/migrieren.ts"
+      - "package.json"
+      - ".github/workflows/connector-persistenz.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nachweis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Connector-Persistenz testen
+        run: npx vitest run connector-hub db/connector-hub-schema.test.ts
+
+      - name: Connector-Persistenz gegen frischen Neon-Zweig
+        run: npm run connector:nachweis
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_DATABASE: ${{ secrets.NEON_DATABASE }}
+          NEON_ROLE: ${{ secrets.NEON_ROLE }}
