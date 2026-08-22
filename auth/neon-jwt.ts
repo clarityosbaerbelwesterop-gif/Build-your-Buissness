@@ -1,4 +1,8 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import {
+  createRemoteJWKSet,
+  jwtVerify,
+  type JWTVerifyGetKey,
+} from "jose";
 import { z } from "zod";
 
 import { optional, pflicht } from "../config/umgebung.js";
@@ -30,7 +34,7 @@ const Token = z.string().trim().min(20).max(16_384);
 export type NeonJwtKonfiguration = z.infer<typeof Konfiguration>;
 export type TokenPruefer = (token: string) => Promise<VerifizierteIdentitaet>;
 
-type SchluesselQuelle = ReturnType<typeof createRemoteJWKSet>;
+type SchluesselQuelle = JWTVerifyGetKey;
 
 /**
  * Absichtlich informationsarme Fehlermeldung an der Auth-Grenze.
