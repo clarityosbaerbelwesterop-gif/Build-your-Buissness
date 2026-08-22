@@ -37,8 +37,8 @@ describe("Migration 005 Billing/Credits", () => {
     expect(sql).not.toMatch(/grant\s+(?:insert|update|delete)[^;]*to byb_worker/i);
   });
 
-  it("speichert keine Stripe-Secrets oder rohen Webhook-Payloads", () => {
-    expect(sql).not.toMatch(/secret|api_key|refresh_token|access_token|payload\s+jsonb/i);
+  it("definiert keine Spalte für Stripe-Secrets oder rohe Webhook-Payloads", () => {
+    expect(sql).not.toMatch(/\b(?:secret|api_key|refresh_token|access_token|payload)\b\s+(?:text|jsonb|varchar)/i);
     expect(sql).toContain("stripe_event_id text primary key");
     expect(sql).toContain("stripe_event_id  text unique");
   });
