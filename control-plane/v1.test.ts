@@ -104,6 +104,19 @@ describe("Control Plane v1", () => {
     expect(gestartet.ereignisse[0]?.klartext).toContain("Produkt bauen");
   });
 
+  it("wechselt nach interner Arbeit sichtbar in den Freigabezustand", () => {
+    let auftrag = beispielAuftrag();
+    auftrag = aktionStarten(auftrag, "code", 1000);
+    auftrag = aktionAbschliessen(auftrag, "code", "Code und Tests abgeschlossen.", 27, 1001);
+
+    expect(auftrag.zustand).toBe("wartet_freigabe");
+    expect(naechsteAktionen(auftrag)).toHaveLength(0);
+
+    auftrag = freigabeErteilen(auftrag, "deploy", "deploy-dauerfreigabe", 1002);
+    expect(auftrag.zustand).toBe("laeuft");
+    expect(naechsteAktionen(auftrag).map((aktion) => aktion.id)).toEqual(["deploy"]);
+  });
+
   it("startet externe Arbeit weder vor Abhängigkeit noch vor Freigabe", () => {
     let auftrag = beispielAuftrag();
     expect(() => aktionStarten(auftrag, "deploy", 1000)).toThrow(/noch nicht startbar/);
@@ -176,6 +189,20 @@ describe("Control Plane v1", () => {
         ],
       }),
     ).toThrow(/Abhängigkeiten/);
+  });
+
+  it("verwirft zyklische Aktionspläne statt sie dauerhaft festzufahren", () => {
+    const basis = beispielAuftrag();
+
+    expect(() =>
+      Auftrag.parse({
+        ...basis,
+        aktionen: [
+          { ...basis.aktionen[0], abhaengigkeiten: ["deploy"] },
+          { ...basis.aktionen[1], abhaengigkeiten: ["code"] },
+        ],
+      }),
+    ).toThrow(/Zyklus/);
   });
 
   it("akzeptiert keine doppelten Aktions-IDs", () => {
