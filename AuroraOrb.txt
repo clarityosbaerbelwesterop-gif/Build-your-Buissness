@@ -1,0 +1,21 @@
+import { motion } from "framer-motion";
+
+export function AuroraOrb({ running }: { running: boolean }) {
+  return (
+    <motion.div
+      className="orb"
+      animate={running ? { scale: [1, 1.15, 1], rotate: 360 } : { scale: 1, rotate: 0 }}
+      transition={
+        running
+          ? { scale: { repeat: Infinity, duration: 2, ease: "easeInOut" }, rotate: { repeat: Infinity, duration: 6, ease: "linear" } }
+          : { duration: 0.4 }
+      }
+      style={{
+        width: 14, height: 14, borderRadius: "50%",
+        background: "var(--glow-vibe)",
+        backgroundSize: "200% 200%",
+        filter: running ? "blur(0px) drop-shadow(0 0 8px #a855f7)" : "none",
+      }}
+    />
+  );
+}
