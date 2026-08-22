@@ -43,6 +43,22 @@ jobs:
           curl -fsS -b cookies.txt -o token.json "$AUTH_BASE/token"
           TOKEN="$(jq -er '.token | strings | select(length > 20)' token.json)"
 
+          NEON_AUTH_TEST_TOKEN="$TOKEN" node --input-type=module - <<'NODE'
+          import { decodeJwt, decodeProtectedHeader } from "jose";
+          const token = process.env.NEON_AUTH_TEST_TOKEN;
+          if (token === undefined) throw new Error("Testtoken fehlt.");
+          const payload = decodeJwt(token);
+          const header = decodeProtectedHeader(token);
+          console.error("Provider-Metadaten: " + JSON.stringify({
+            alg: header.alg ?? null,
+            iss: payload.iss ?? null,
+            aud: payload.aud ?? null,
+            hat_sub: typeof payload.sub === "string",
+            hat_exp: typeof payload.exp === "number",
+            hat_nbf: typeof payload.nbf === "number",
+          }));
+          NODE
+
           NEON_AUTH_TEST_TOKEN="$TOKEN" \
           NEON_AUTH_BASE_URL="$AUTH_BASE" \
           NEON_AUTH_JWKS_URL="$JWKS_URL" \
