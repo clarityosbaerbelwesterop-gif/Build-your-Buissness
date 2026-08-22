@@ -1,9 +1,10 @@
 /**
- * Der Datenvertrag zwischen Angreifer, Fixer, Orchestrator und Oberfläche.
+ * Der Datenvertrag für einen Debug-/Security-Prüflauf.
  *
- * CLAUDE.md §1: „Das Prüfprotokoll ist das Produkt. Alles andere ist Beiwerk."
- * Diese Datei ist deshalb die wichtigste im Repo. Was hier nicht vorgesehen
- * ist, kann später nicht angezeigt werden.
+ * BYB ist der autonome Business-Operator; dieses Protokoll ist seine Audit- und
+ * Vertrauensschicht für Prüfungen. Es muss deshalb exakt festhalten, was
+ * tatsächlich geprüft, gefunden, behoben oder offengelassen wurde, ohne daraus
+ * eine allgemeine Sicherheitsbehauptung abzuleiten.
  *
  * Warum Zod und nicht nur Typen: Typen verschwinden beim Übersetzen. Ein
  * Befund kommt später aus einem Sprachmodell, und ein Modell hält sich nicht
@@ -48,8 +49,8 @@ export type Schweregrad = z.infer<typeof Schweregrad>;
 
 /**
  * Die Kategorie ist die Zeile im Protokoll, die der Nutzer sieht
- * (DESIGN-UI.md, „Protokollzeile"). Die Angriffsklasse ist der konkrete
- * Versuch darunter.
+ * (DESIGN-UI.md, „Prüfzeile"). Die Angriffsklasse ist der konkrete Versuch
+ * darunter.
  *
  * Beides getrennt, weil eine Kategorie mehrere Klassen enthält: „Zugangsdaten"
  * umfasst den Fund im Quelltext und den im ausgelieferten Bündel — für den
@@ -77,7 +78,7 @@ export const Befund = z.object({
   schweregrad: Schweregrad,
 
   /**
-   * CHATHUB.md: „Ein Satz pro Fund, für Nicht-Techniker verständlich."
+   * CHATHUB.md: ein Satz pro Fund, für Nicht-Techniker verständlich.
    *
    * Die Mindestlänge ist Absicht. „SQL-Injection" erfüllt kein Feld, das
    * erklären soll, was möglich war — und genau solche Halbsätze entstehen,

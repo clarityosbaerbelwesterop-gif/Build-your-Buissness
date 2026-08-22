@@ -1,29 +1,17 @@
-# 💬 ChatHub – Frontend & Chat Core
-> Vibe-Coding UI im Claude/Lovable-Stil mit Emergent-Animationen
+# Chathub.md — Legacy-Hinweis
 
-## Stack
-React 18 + Vite + TailwindCSS + Framer Motion + SSE Streaming
+Diese Datei enthielt eine ältere Chat-UI-Skizze im Lovable-/Emergent-Stil.
+Sie ist **keine verbindliche Produktspezifikation mehr** und bleibt nur als
+Hinweis bestehen, damit alte Verweise nicht still ins Leere zeigen.
 
-## Komponenten-Architektur
-- <ChatContainer/> – Auto-Scroll, Message-Queue
-- <StreamingBubble/> – Token-weise Animation (Typing-Effect)
-- <AgentThinking/> – Emergent-Style Loading (pulsende Orbs, Tool-Steps)
-- <CodeBlock/> – Syntax-Highlight + Copy + "Run in Sandbox" Button
-- <Sidebar/> – Sessions aus Neon DB (RLS-gefiltert)
+Verbindlich sind:
 
-## Streaming-Logik
-const stream = new EventSource(`/api/chat/stream?session=${id}`);
-- Tokens appenden → React state
-- tool_call Events → AgentThinking UI
-- citations/artifacts → Artefakt-Panel rechts (Lovable-Pattern)
+- `CLAUDE.md` — Produkt- und Betriebsregeln
+- `CHATHUB.md` — Nutzerfluss, Autonomie und Freigaben
+- `DESIGN-UI.md` — aktuelle Gestaltung
+- `STATUS.md` — nachgewiesener technischer Stand
 
-## UI-Vibe Specs
-- Dark Mode default, Glassmorphism Cards (backdrop-blur)
-- Framer Motion: spring-Animationen, staggered Message-Entrance
-- Gradient-Borders bei aktivem Agent-Status
-- Micro-Animations: Button-Hover scale 1.02, Send-Button → Morpht zu Loading-Dots
-
-## API-Anbindung
-- POST /api/chat → Backend (auth-header JWT)
-- GET /api/sessions → RLS: nur eigene
-- Stripe-Gate: useUsage() Hook prüft Credits vor Send
+Insbesondere sind Glassmorphism, Gradient-Borders, ein sichtbarer „Run in
+Sandbox"-Knopf und ein reiner Chat-plus-CodeBlock-Aufbau **keine Vorgaben** für
+BYB. Die Sandbox ist Teil der autonomen Execution-Schicht; der Nutzer soll sie
+nicht als technischen Bedienknopf verwalten müssen.
