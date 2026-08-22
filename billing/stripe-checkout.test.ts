@@ -10,6 +10,12 @@ function antwort(): Response {
   });
 }
 
+function starterPlan() {
+  const plan = BYB_PLAENE.find((eintrag) => eintrag.key === "starter");
+  if (plan === undefined) throw new Error("Starter-Plan fehlt im BYB-Katalog.");
+  return plan;
+}
+
 describe("BYB Stripe Checkout", () => {
   it("verwendet beim Starter nur die fest verdrahtete BYB-Price-ID und Nutzer-Metadata", async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(antwort());
@@ -28,7 +34,7 @@ describe("BYB Stripe Checkout", () => {
     const body = init?.body;
     expect(body).toBeInstanceOf(URLSearchParams);
     const parameter = body as URLSearchParams;
-    expect(parameter.get("line_items[0][price]")).toBe(BYB_PLAENE[0].stripePriceId);
+    expect(parameter.get("line_items[0][price]")).toBe(starterPlan().stripePriceId);
     expect(parameter.get("metadata[application]")).toBe("byb");
     expect(parameter.get("metadata[nutzer_id]")).toBe("user-1");
     expect(parameter.get("success_url")).toBe("https://preview.example.com/?checkout=erfolg&session_id={CHECKOUT_SESSION_ID}");
