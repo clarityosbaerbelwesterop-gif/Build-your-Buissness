@@ -1,0 +1,101 @@
+name: Vercel Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Zum Secret-Sync + Preview-Deploy "deploy" eintippen.'
+        required: true
+        default: "trocken"
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: team_5KyyWAPW9vLU4EiaKaYZuhaG
+  VERCEL_PROJECT_ID: prj_s6KtJoXp0bUMzRs0O6dbI9abd1mB
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run pruefen
+
+      - name: Runtime-Zugänge nur auf Vorhandensein prüfen
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
+          NEON_AUTH_JWKS_URL: ${{ secrets.NEON_AUTH_JWKS_URL }}
+        run: |
+          fehlend=0
+          for name in VERCEL_TOKEN DATABASE_URL STRIPE_SECRET_KEY NEON_AUTH_BASE_URL NEON_AUTH_JWKS_URL; do
+            if [ -z "${!name}" ]; then
+              echo "$name: nicht gesetzt"
+              fehlend=1
+            else
+              echo "$name: gesetzt"
+            fi
+          done
+          if [ "$fehlend" -ne 0 ]; then exit 1; fi
+
+      - name: Trockenlauf
+        if: inputs.deploy != 'deploy'
+        run: echo 'Kein Vercel-Write. Für Sync + Preview-Deploy mit "deploy" starten.'
+
+      - name: Preview-Secrets synchronisieren
+        if: inputs.deploy == 'deploy'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
+          NEON_AUTH_JWKS_URL: ${{ secrets.NEON_AUTH_JWKS_URL }}
+          NEON_AUTH_ISSUER: ${{ secrets.NEON_AUTH_ISSUER }}
+          NEON_AUTH_AUDIENCE: ${{ secrets.NEON_AUTH_AUDIENCE }}
+          NV_API_KEY_1: ${{ secrets.NV_API_KEY_1 }}
+          NV_API_KEY_2: ${{ secrets.NV_API_KEY_2 }}
+          NV_API_KEY_3: ${{ secrets.NV_API_KEY_3 }}
+          NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL }}
+        run: |
+          set -euo pipefail
+          sync_secret() {
+            name="$1"
+            value="$2"
+            if [ -z "$value" ]; then
+              echo "$name: nicht gesetzt, nicht synchronisiert"
+              return 0
+            fi
+            echo "::add-mask::$value"
+            npx --yes vercel@latest env rm "$name" preview --yes --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
+            printf '%s' "$value" | npx --yes vercel@latest env add "$name" preview --sensitive --token "$VERCEL_TOKEN" >/dev/null
+            echo "$name: preview synchronisiert"
+          }
+          sync_secret DATABASE_URL "$DATABASE_URL"
+          sync_secret STRIPE_SECRET_KEY "$STRIPE_SECRET_KEY"
+          sync_secret NEON_AUTH_BASE_URL "$NEON_AUTH_BASE_URL"
+          sync_secret NEON_AUTH_JWKS_URL "$NEON_AUTH_JWKS_URL"
+          sync_secret NEON_AUTH_ISSUER "$NEON_AUTH_ISSUER"
+          sync_secret NEON_AUTH_AUDIENCE "$NEON_AUTH_AUDIENCE"
+          sync_secret NV_API_KEY_1 "$NV_API_KEY_1"
+          sync_secret NV_API_KEY_2 "$NV_API_KEY_2"
+          sync_secret NV_API_KEY_3 "$NV_API_KEY_3"
+          sync_secret NVIDIA_BASE_URL "$NVIDIA_BASE_URL"
+
+      - name: Vercel Preview deployen
+        if: inputs.deploy == 'deploy'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          url="$(npx --yes vercel@latest deploy --yes --token "$VERCEL_TOKEN")"
+          echo "Preview: $url"
+          echo "### BYB Vercel Preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
