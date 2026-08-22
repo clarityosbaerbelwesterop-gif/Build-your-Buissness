@@ -16,18 +16,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: m05-fixer-und-nachweise
+
+      # npm 10.9.8 auf dem Node-22-Runner bricht beim Neuaufloesen dieses
+      # Lockfiles intern mit `edgesOut` ab. Deshalb nur die Aufloesung mit der
+      # aktuellen npm-Generation; validiert wird danach wieder unter Node 22.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-
+          node-version: 24
       - name: Gepatchte Test-Abhaengigkeiten sauber aufloesen
         run: |
           set -euo pipefail
           npm pkg set devDependencies.vitest=4.1.10
           rm package-lock.json
           npm install --package-lock-only --ignore-scripts
-          npm ci
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Installation unter Zielversion pruefen
+        run: npm ci
       - name: Lint
         run: npm run lint
       - name: Typpruefung
