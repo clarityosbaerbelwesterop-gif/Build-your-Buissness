@@ -51,19 +51,26 @@ export class AuthTokenFehler extends Error {
 }
 
 /**
- * Neon Auth verwendet bei Better Auth standardmäßig die Auth-Basis-URL als
- * Issuer und Audience. Beide bleiben überschreibbar, damit eine spätere
- * Provider-Konfiguration nicht durch eine versteckte Annahme im Code blockiert
- * wird. JWKS und Basis-URL sind öffentliche Konfiguration, keine Geheimnisse.
+ * Managed Neon Auth stellt die API unter einem Pfad wie `/neondb/auth` bereit,
+ * setzt `iss` und `aud` im ausgestellten JWT aber auf den HTTPS-Origin des
+ * Endpunkts. Das wurde im M0.7-Livenachweis gegen einen isolierten Neon-Zweig
+ * beobachtet und ist deshalb hier die Vorgabe statt einer geratenen Pfadregel.
+ *
+ * Beide Werte bleiben explizit überschreibbar. Damit kann eine spätere
+ * Provider-Konfiguration enger werden, ohne diese Verifikationslogik zu ändern.
+ * JWKS und Basis-URL sind öffentliche Konfiguration, keine Geheimnisse.
  */
 export function neonJwtKonfigurationAusUmgebung(
   umgebung: Record<string, string | undefined> = process.env,
 ): NeonJwtKonfiguration {
-  const basis = pflicht("NEON_AUTH_BASE_URL", "Neon-Auth-Token prüfen", umgebung);
+  const basis = HttpsUrl.parse(
+    pflicht("NEON_AUTH_BASE_URL", "Neon-Auth-Token prüfen", umgebung),
+  );
+  const origin = new URL(basis).origin;
   return Konfiguration.parse({
     jwksUrl: pflicht("NEON_AUTH_JWKS_URL", "Neon-Auth-Token prüfen", umgebung),
-    issuer: optional("NEON_AUTH_ISSUER", basis, umgebung),
-    audience: optional("NEON_AUTH_AUDIENCE", basis, umgebung),
+    issuer: optional("NEON_AUTH_ISSUER", origin, umgebung),
+    audience: optional("NEON_AUTH_AUDIENCE", origin, umgebung),
   });
 }
 
