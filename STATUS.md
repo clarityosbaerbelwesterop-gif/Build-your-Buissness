@@ -1,10 +1,16 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M0.6 ist in PR #8 gebaut und nachgewiesen.**
-PR #7 wurde als M0.5 nach `main` gemergt (`234dbe33`). Auf dem M0.6-Code-Head
-`fe6d2426` sind CI, RLS-Nachweis, Geheimnisse, Sprache und Backend-Nachweis grün.
-Die normale CI meldet 14 Testdateien / **201 Tests**, Lint und Typprüfung grün
-sowie `npm audit`: **0 bekannte Schwachstellen**.
+Stand: **M0.7 ist in PR #9 gebaut und nachgewiesen.**
+
+- M0.5 / PR #7 ist in `main` (`234dbe33`).
+- M0.6 / PR #8 ist in `main` (`8776c66d`).
+- M0.7 liegt auf `m07-neon-auth-jwt`.
+- Auf dem M0.7-Code-Head `18c6a080` sind CI, Geheimnisse, Sprache und der
+  bestehende Backend-Nachweis grün.
+- Die normale CI meldet **16 Testdateien / 215 Tests**, Lint und Typprüfung grün
+  sowie `npm audit --audit-level=high`: **0 bekannte Schwachstellen**.
+- Ein echtes, auf einem isolierten Neon-Auth-Zweig ausgestelltes JWT wurde vom
+  M0.7-Prüfer akzeptiert. Der Testzweig wurde danach gelöscht.
 
 ## Was steht
 
@@ -15,92 +21,109 @@ sowie `npm audit`: **0 bekannte Schwachstellen**.
 | `attackers/` | Drei statische Klassen: Zugangsdaten, RLS, Auth an Route-Handlern. |
 | `fixers/regeln.ts` | Drei konservative Regel-Fixer; unbekannter Kontext bleibt offen statt geraten zu werden. |
 | `db/001_grundschema.sql` | Vier BYB-Tabellen mit `ENABLE`, `FORCE` und Mandanten-Policy. |
-| `db/002_protokoll_inhalt.sql` | M0.6-Migration für kanonisches Protokoll-JSON und die eingeschränkte Laufzeitrolle `byb_app`. |
-| `db/auth-kontext.ts` | Übernimmt nur eine bereits verifizierte Nutzerkennung und setzt sie transaktional in den DB-Kontext. |
+| `db/002_protokoll_inhalt.sql` | Kanonisches Protokoll-JSON plus eingeschränkte Laufzeitrolle `byb_app`. |
+| `db/auth-kontext.ts` | Setzt nur eine bereits verifizierte Nutzerkennung transaktional in den DB-Kontext. |
 | `db/protokoll-speicher.ts` | Speichert ein validiertes `Protokoll v1` atomar und liest die kanonische Fassung wieder über den v1-Vertrag. |
-| `db/protokoll-nachweis.ts` | Prüft Schreiben, verlustfreies Lesen und Mandantentrennung auf einem kurzlebigen Neon-Zweig. |
-| CI | Lint, Typen, 201 Tests, Dependency-Audit, Zugangsübersicht, Secret-Wächter, Sprach-Wächter, RLS- und Backend-Nachweis. |
+| `auth/neon-jwt.ts` | Prüft Bearer-JWTs kryptografisch über JWKS, Issuer, Audience, Ablaufzeit und `sub`. |
+| `auth/protokoll-zugriff.ts` | Verbindet die Tokenprüfung mit dem vorhandenen M0.6-Schreib-/Lesepfad. |
+| `auth/neon-auth-nachweis.ts` | Kleiner Livenachweis für ein vom Provider ausgestelltes JWT; gibt weder Token noch Nutzerkennung aus. |
+| CI | Lint, Typen, 215 Tests, Dependency-Audit, Zugangsübersicht, Secret-Wächter, Sprach-Wächter und Backend-Nachweis. |
 
-## M0.6 — Backend-Persistenz und Auth-Brücke
+## M0.6 — Persistenz und DB-Kontext
 
-Das bisherige relationale Schema konnte ein vollständiges `Protokoll v1` nicht
-verlustfrei rekonstruieren: insbesondere die Befund-Snapshots je Runde sind im
-Datenvertrag enthalten, aber nicht als vollständige historische Fassung in den
-relationalen Tabellen abgelegt.
+M0.6 hält das vollständige `Protokoll v1` in `protokolle.inhalt` als kanonische
+JSONB-Fassung. Die Tabellen `laeufe`, `protokolle`, `runden` und `befunde`
+bleiben die relationale Projektion für Suche und spätere Auswertungen. Beide
+Darstellungen entstehen aus derselben validierten Eingabe und werden in einer
+Transaktion geschrieben.
 
-M0.6 verwendet deshalb zwei Darstellungen aus **derselben validierten Eingabe**:
+Für Nutzerdatenzugriffe beginnt `db/auth-kontext.ts` eine Transaktion, wechselt
+lokal auf `byb_app`, setzt `request.jwt.claims` mit der bereits verifizierten
+`sub`-Kennung und überlässt die Zeilenfilterung den bestehenden RLS-Policies.
+`byb_app` ist als NOLOGIN/NOBYPASSRLS-Rolle in Migration 002 definiert.
 
-- `protokolle.inhalt` hält das vollständige versionierte Protokoll als
-  kanonische JSONB-Fassung.
-- `laeufe`, `protokolle`, `runden` und `befunde` bleiben die relationale
-  Projektion für Suche und spätere Auswertungen.
-- Lesen erfolgt aus der kanonischen Fassung und durchläuft danach erneut
-  `protocol/v1.ts`; fehlerhafte gespeicherte Daten werden nicht stillschweigend
-  als gültiges Protokoll ausgegeben.
-- Schreiben von Lauf, Protokoll, Runden und Befunden geschieht in einer
-  Transaktion.
+Der Backend-Nachweis speichert auf einem kurzlebigen Neon-Zweig Protokolle für
+zwei Nutzer, liest sie verlustfrei zurück und prüft, dass jeder Nutzer beim
+Lesen des fremden Laufs keine Zeile erhält. Der Zweig wird danach entfernt.
 
-### Auth-/DB-Kontext
+## M0.7 — Provider-JWT vor dem DB-Kontext
 
-`db/auth-kontext.ts` prüft **keine JWT-Signatur**. Das ist Absicht: diese Grenze
-nimmt eine Identität erst nach externer Token-Verifikation an und übernimmt nur
-deren `sub`-Kennung.
+M0.6 begann absichtlich erst **nach** der Tokenprüfung. M0.7 schließt diese
+Lücke mit einer eigenen Auth-Grenze:
 
-Für jeden Nutzerdatenzugriff:
+1. Aus `Authorization` wird genau ein Bearer-Token angenommen.
+2. Das Token wird mit `jose` gegen den konfigurierten JWKS-Endpunkt geprüft.
+3. Zugelassen ist für den aktuellen Neon-Auth-Pfad `EdDSA` / Ed25519.
+4. `iss`, `aud`, `exp` und `sub` sind Pflicht; ein vorhandenes `nbf` wird
+   ebenfalls ausgewertet.
+5. Erst nach erfolgreicher Prüfung wird aus `sub` eine `VerifizierteIdentitaet`.
+6. Das rohe JWT gelangt nicht in den DB-Kontext; dort landet nur die
+   Nutzerkennung.
 
-1. beginnt eine DB-Transaktion,
-2. wechselt die Verbindung auf `byb_app`,
-3. setzt `request.jwt.claims` mit der verifizierten `sub`-Kennung lokal für
-   diese Transaktion,
-4. lässt die bestehenden RLS-Policies lesen/schreiben filtern,
-5. beendet oder verwirft die Transaktion.
+Negative Tests decken unter anderem fremde Signatur, falschen Issuer, falsche
+Audience, abgelaufene und noch nicht gültige Tokens, fehlendes `sub` und ein
+falsches Authorization-Schema ab. Bei einer Auth-Ablehnung wird der
+Nutzerdatenzugriff nicht begonnen.
 
-`byb_app` ist NOLOGIN, nicht SUPERUSER und hat kein `BYPASSRLS`.
+### Echter Provider-Nachweis
 
-## Nachweise am 22.08.2026
+Am 22.08.2026 wurde Neon Auth nur auf dem isolierten Zweig
+`br-polished-violet-b1iuqhwo` für den M0.7-Nachweis verwendet. Email/Passwort war
+dort aktiviert. Der Nachweis hat:
 
-### GitHub PR #8 — Code-Head `fe6d2426`
+- einen kurzlebigen Testnutzer registriert,
+- eine Session aufgebaut,
+- über Better Auth `/token` ein echtes JWT bezogen,
+- das JWT mit dem M0.7-Code gegen den von Neon gelieferten JWKS-Endpunkt geprüft,
+- danach den gesamten Neon-Zweig samt Testkonten gelöscht.
 
-- CI: grün.
-- Lint: grün.
-- TypeScript: grün.
-- Vitest: 14 Dateien, **201 Tests grün**.
-- `npm audit --audit-level=high`: **0 vulnerabilities**.
-- Geheimnisse: grün.
-- Sprache: grün.
-- RLS-Nachweis: grün.
-- Backend-Nachweis: grün.
+Dabei wurde ein Integrationsdetail gefunden und behoben: Managed Neon Auth
+liefert die API unter einem Pfad wie `/neondb/auth`, setzt `iss` und `aud` des
+JWT aber auf den **HTTPS-Origin** des Endpunkts. Der erste Livenachweis lehnte
+das echte Token deshalb korrekt ab, weil der Code zunächst den vollständigen
+Auth-Pfad erwartet hatte. Der Default wird jetzt aus dem Origin abgeleitet;
+explizite `NEON_AUTH_ISSUER`- und `NEON_AUTH_AUDIENCE`-Werte können ihn weiterhin
+überschreiben.
 
-Der Backend-Nachweis erzeugt einen kurzlebigen Neon-Zweig, wendet dort M0.6 an,
-speichert für zwei verschiedene Nutzer je ein Protokoll, liest beide
-verlustfrei zurück, bestätigt die gegenseitige Nicht-Sichtbarkeit und löscht
-den Zweig anschließend wieder.
+Das im Livenachweis beobachtete Schlüsselformat war Ed25519 (`kty=OKP`,
+`crv=Ed25519`); das ausgestellte JWT verwendete `alg=EdDSA` und enthielt `sub`
+und `exp`. Token, Passwort und Nutzerkennung wurden nicht ausgegeben.
 
-Zusätzlich wurde über den Neon-Connector auf dem separaten Testzweig
-`br-wild-bird-b1ve7uom` die Rollen-/RLS-Kette direkt gegengeprüft:
+## Neon `production` — korrigierter Ist-Stand
 
-- `byb_app`: `rolcanlogin=false`, `rolbypassrls=false`, `rolsuper=false`.
-- mit Nutzer A war das Testprotokoll sichtbar: 1 Zeile.
-- nach Wechsel auf Nutzer B war dasselbe Testprotokoll nicht sichtbar: 0 Zeilen.
-- die Testdaten wurden per Rollback verworfen.
-
-## Produktion — unverändert
-
-Neon-Projekt: `damp-dream-67070160` (`Build your Buissness`), PostgreSQL 18,
+Projekt: `damp-dream-67070160` (`Build your Buissness`), PostgreSQL 18,
 Default-Branch `production` (`br-patient-snow-b11ksdc8`).
 
-M0.6 hat **keine** Produktionsmigration und **keine** Auth-Provisionierung
-ausgeführt:
+Eine frühere Fassung dieser Datei sagte, Neon Auth sei dort noch nicht
+provisioniert. Der direkte Read-only-Check am 22.08.2026 zeigt dagegen:
 
-- `002_protokoll_inhalt.sql` ist noch nicht auf `production` angewendet.
-- Neon Auth ist noch nicht auf `production` provisioniert.
-- Ein vorhandenes altes Protokoll würde Migration 002 bewusst blockieren,
-  statt aus unvollständigen Altspalten ein v1-Protokoll zu erfinden. Der
-  Produktionsstand war beim letzten direkten Check in diesem Schritt leer;
-  vor einem späteren Anwenden wird das erneut geprüft.
+- Schema `neon_auth` existiert bereits.
+- `neon_auth.project_config` enthält eine Projektkonfiguration für
+  `Build your Buissness`.
+- Der Zeitpunkt und der ursprüngliche Auslöser dieser Provisionierung sind aus
+  dem aktuellen Repo-Stand nicht dokumentiert.
+- M0.7 hat an der produktiven Auth-Konfiguration **nichts geändert**.
 
-Der GitHub-Workflow `Neon` bleibt manuell und verlangt sowohl die konkrete
-handgeschriebene Migrationsdatei als auch die Eingabe `anwenden`.
+Unverändert offen auf `production`:
+
+- Migration `002_protokoll_inhalt.sql` ist dort noch **nicht** angewendet.
+- Die Rolle `byb_app` existiert dort noch **nicht**.
+- Deshalb ist der neue M0.6/M0.7-Pfad noch kein produktiv verwendeter
+  Nutzerdatenpfad.
+
+Vor einem späteren Anwenden von Migration 002 wird erneut geprüft, ob bereits
+Protokollzeilen existieren. Vorhandene Protokolle ohne kanonischen v1-Inhalt
+blockieren die Migration bewusst, statt unvollständige Daten zu erraten.
+
+## Abhängigkeiten
+
+M0.7 ergänzt `jose` **6.2.9** für JWT/JWKS-Verifikation. Das Lockfile wurde in
+GitHub Actions erzeugt und anschließend unter Node 22 mit Lint, Typprüfung,
+Tests und Dependency-Audit geprüft. Die temporäre Workflow-Datei für diesen
+Lockfile-Schritt ist nicht Teil des finalen PR-Diffs.
+
+Vitest bleibt auf `4.1.10`. Die normale CI blockiert weiterhin hohe und
+kritische bekannte Dependency-Funde über `npm audit --audit-level=high`.
 
 ## Zugangsdaten und historischer Vorfall
 
@@ -126,7 +149,7 @@ Aktuell durch CI als gesetzt nachgewiesen:
 - `NV_API_KEY_3`
 - `NEON_API_KEY`
 
-Nicht gesetzt und für den aktuellen PR nicht erforderlich:
+Nicht gesetzt und für M0.7 nicht erforderlich:
 
 - `NVIDIA_BASE_URL` — der Code hat eine Vorgabe.
 - `DATABASE_URL` — die Neon-Anbindung kann die Verbindung über die Neon-API
@@ -136,34 +159,41 @@ Keine Secret-Werte werden in CI ausgegeben.
 
 ## Offene Produktfragen
 
-### 1. Echte Auth-Verifikation
+### 1. Produktive Freigabe des neuen Datenpfads
 
-M0.6 beginnt **nach** der Token-Verifikation. Noch fehlt der Provider-Adapter,
-der ein reales Nutzer-JWT kryptografisch prüft und erst danach die `sub`-Kennung
-an `auth-kontext.ts` übergibt. Neon Auth ist dafür der nächste vorgesehene
-Integrationsschritt; produktive Provisionierung erfolgt erst als eigener,
-ausdrücklich freigegebener Zustandsschritt.
+Code und Nachweise für Persistenz, RLS-Kontext und Provider-JWT stehen. Auf
+`production` fehlt aber noch Migration 002 mit `protokolle.inhalt` und
+`byb_app`. Das Anwenden bleibt ein eigener produktiver Zustandsschritt und wird
+nicht in PR #9 versteckt.
 
-### 2. Sandbox-Laufzeit — blockiert M1
+### 2. Anwendungsschicht und Produktfluss
+
+Der Backend-Kern hat jetzt eine Auth-Grenze und einen mandantengebundenen
+Protokollspeicher, aber noch keinen endgültigen HTTP-/UI-Produktfluss. Dieser
+Schritt sollte an der tatsächlichen Nutzerreise ausgerichtet werden, statt eine
+Route oder Oberfläche aus technischen Annahmen zu erfinden.
+
+### 3. Sandbox-Laufzeit — blockiert M1
 
 Noch offen. Kandidaten aus `CLAUDE.md`: Fly Machines, E2B, Modal, Render
 Background Worker. Bis zur Entscheidung bleiben Angriffe statisch.
 
-### 3. Laufzeit-Fixer und Grenzen der statischen Prüfung
+### 4. Laufzeit-Fixer und Grenzen der statischen Prüfung
 
 Noch nicht abgedeckt sind unter anderem fachlich falsche vorhandene Auth-Prüfungen,
 Policies mit falscher Mandantenspalte, Rechteausweitung über mehrere Routen und
 Datenabfluss, der erst in einer laufenden Anwendung sichtbar wird. Diese Grenzen
 müssen im späteren Prüfprotokoll sichtbar bleiben.
 
-## Nächster Schritt nach PR #8
+## Nächster Schritt nach PR #9
 
-**M0.7: Auth-Provider/JWT-Verifikation auf einem isolierten Zweig.**
+PR #9 zuerst mergen. Danach gibt es zwei getrennte Arten von Arbeit:
 
-Ziel: ein reales Provider-Token validieren, daraus ausschließlich nach gültiger
-Prüfung die `sub`-Kennung ableiten und den bereits nachgewiesenen M0.6-Pfad damit
-aufrufen. Erst danach folgen — jeweils als eigener freigegebener Schritt —
-Migration 002 auf `production` und produktive Auth-Provisionierung.
+1. **Produktiver Zustandsschritt:** Migration 002 erst nach erneutem Read-only-
+   Check und ausdrücklicher Freigabe auf `production` anwenden; anschließend
+   `byb_app` und den kanonischen Protokollspeicher dort verifizieren.
+2. **Produktarbeit:** den nächsten HTTP-/UI-Schritt aus der tatsächlichen
+   BYB-Nutzerreise ableiten. Dafür ist zusätzlicher Produktkontext sinnvoll,
+   bevor eine Oberfläche oder API-Struktur geraten wird.
 
-Die Protokoll-Oberfläche aus `CHATHUB.md` kann anschließend gegen den echten
-Backend-Lesepfad statt gegen ein Beispielobjekt gebaut werden.
+M1 bleibt unabhängig davon durch die noch offene Sandbox-Laufzeit blockiert.
