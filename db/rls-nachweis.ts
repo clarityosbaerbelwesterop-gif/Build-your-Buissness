@@ -54,8 +54,14 @@ async function pruefrolleAnlegen(v: Verbindung, rollenname: string): Promise<voi
     `create role ${rolle} nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls`,
   );
   await v.query(`grant ${rolle} to current_user`);
-  await v.query(`grant usage on schema public, auth to ${rolle}`);
+
+  // PostgreSQL verlangt CREATE auf dem Schema, bevor eine Rolle Eigentümer
+  // einer Tabelle in diesem Schema werden darf. Die Rolle existiert nur auf
+  // dem kurzlebigen Testzweig, ist NOLOGIN und wird im finally entfernt.
+  await v.query(`grant usage, create on schema public to ${rolle}`);
+  await v.query(`grant usage on schema auth to ${rolle}`);
   await v.query(`grant execute on function auth.nutzer_kennung() to ${rolle}`);
+
   for (const tabelle of TABELLEN) {
     await v.query(`alter table ${sqlIdent(tabelle)} owner to ${rolle}`);
   }
@@ -154,10 +160,7 @@ async function eineZeile(
   return id;
 }
 
-async function gegenprobe(
-  v: Verbindung,
-  rollenname: string,
-): Promise<string[]> {
+async function gegenprobe(v: Verbindung, rollenname: string): Promise<string[]> {
   const klagen: string[] = [];
   const rolle = sqlIdent(rollenname);
 
