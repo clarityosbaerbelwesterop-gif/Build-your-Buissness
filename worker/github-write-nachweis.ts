@@ -11,6 +11,12 @@ function env(name: string): string | undefined {
   return wert === "" ? undefined : wert;
 }
 
+function alsFehler(wert: unknown): Error {
+  return wert instanceof Error
+    ? wert
+    : new Error("Unbekannter Fehler im GitHub-Write-Nachweis.", { cause: wert });
+}
+
 function istGitHubNichtGefunden(fehler: unknown): boolean {
   return fehler instanceof Error && /GitHub-Anfrage fehlgeschlagen \(404\)/.test(fehler.message);
 }
@@ -31,7 +37,7 @@ const api = new GitHubRestApi(token);
 const vorher = await githubRepoNachweis(api, repo);
 const suffix = env("GITHUB_RUN_ID") ?? String(Date.now());
 let zweig: GitHubArbeitszweig | undefined;
-let ausfuehrungsFehler: unknown;
+let ausfuehrungsFehler: Error | undefined;
 
 try {
   zweig = await githubArbeitszweigAnlegen(
@@ -58,10 +64,10 @@ try {
     `Credential: ${dauerhaft === undefined ? "kurzlebiger GitHub-Actions-Token" : "BYB_GITHUB_LIVE_TOKEN"}`,
   );
 } catch (fehler) {
-  ausfuehrungsFehler = fehler;
+  ausfuehrungsFehler = alsFehler(fehler);
 }
 
-let cleanupFehler: unknown;
+let cleanupFehler: Error | undefined;
 if (zweig !== undefined) {
   try {
     await githubArbeitszweigLoeschen(api, zweig);
@@ -69,11 +75,11 @@ if (zweig !== undefined) {
       await api.ref(repo, zweig.branch);
       throw new Error("Der temporäre BYB-Arbeitsbranch konnte nicht vollständig entfernt werden.");
     } catch (fehler) {
-      if (!istGitHubNichtGefunden(fehler)) throw fehler;
+      if (!istGitHubNichtGefunden(fehler)) throw alsFehler(fehler);
     }
     console.error(`Temporärer Branch gelöscht: ${zweig.branch}`);
   } catch (fehler) {
-    cleanupFehler = fehler;
+    cleanupFehler = alsFehler(fehler);
   }
 }
 
