@@ -41,15 +41,17 @@ class SpeicherAttrappe implements SqlVerbindung {
   readonly aufrufe: { sql: string; werte: unknown[] }[] = [];
   ladeInhalt: unknown;
 
-  async query(sql: string, werte: unknown[] = []): Promise<SqlErgebnis> {
+  query(sql: string, werte: unknown[] = []): Promise<SqlErgebnis> {
     this.aufrufe.push({ sql, werte });
     if (sql.includes("insert into protokolle")) {
-      return { rows: [{ id: "22222222-2222-4222-8222-222222222222" }] };
+      return Promise.resolve({ rows: [{ id: "22222222-2222-4222-8222-222222222222" }] });
     }
     if (sql.startsWith("select inhalt")) {
-      return this.ladeInhalt === undefined ? { rows: [] } : { rows: [{ inhalt: this.ladeInhalt }] };
+      return Promise.resolve(
+        this.ladeInhalt === undefined ? { rows: [] } : { rows: [{ inhalt: this.ladeInhalt }] },
+      );
     }
-    return { rows: [] };
+    return Promise.resolve({ rows: [] });
   }
 }
 
