@@ -11,8 +11,9 @@ on:
         description: "Welche Migration?"
         required: true
         type: choice
-        default: "004_connector_hub.sql"
+        default: "005_billing_credits.sql"
         options:
+          - "005_billing_credits.sql"
           - "004_connector_hub.sql"
           - "003_control_plane.sql"
           - "002_protokoll_inhalt.sql"
