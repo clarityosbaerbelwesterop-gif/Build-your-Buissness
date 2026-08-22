@@ -15,6 +15,13 @@ const CheckoutSession = z.object({
   metadata: Metadata.optional(),
 }).passthrough();
 
+const InvoiceLine = z.object({
+  price: z.object({ id: Id }).optional(),
+  pricing: z.object({
+    price_details: z.object({ price: Id }).optional(),
+  }).optional(),
+}).passthrough();
+
 const Invoice = z.object({
   id: Id,
   customer: Id,
@@ -22,6 +29,7 @@ const Invoice = z.object({
   parent: z.object({
     subscription_details: z.object({ subscription: Id }).optional(),
   }).optional(),
+  lines: z.object({ data: z.array(InvoiceLine) }).optional(),
 }).passthrough();
 
 const Subscription = z.object({
@@ -90,8 +98,7 @@ export type BillingBefehl =
 
 type AboStatus = Extract<BillingBefehl, { art: "abo_status" }>["status"];
 
-function bybNutzer(metadata: Record<string, string> | undefined, clientReference?: string | null): string {
-  if (metadata?.application !== "byb") throw new Error("Stripe-Objekt gehört nicht zu BYB.");
+function bybNutzer(metadata: Record<string, string>, clientReference?: string | null): string {
   const wert = metadata.nutzer_id ?? clientReference;
   if (wert === undefined || wert === null || wert.length < 1 || wert.length > 300) {
     throw new Error("BYB-Nutzerzuordnung fehlt im Stripe-Objekt.");
@@ -104,12 +111,22 @@ function aboStatus(status: z.infer<typeof Subscription>["status"]): AboStatus {
   return status;
 }
 
+function invoiceHatBybPreis(invoice: z.infer<typeof Invoice>): boolean {
+  return (invoice.lines?.data ?? []).some((zeile) => {
+    const preis = zeile.price?.id ?? zeile.pricing?.price_details?.price;
+    return preis !== undefined && planNachStripePreis(preis) !== undefined;
+  });
+}
+
 export function stripeEventNormalisieren(eingabe: unknown): BillingBefehl {
   const event = StripeEvent.parse(eingabe);
 
   if (event.type === "checkout.session.completed") {
     const session = CheckoutSession.parse(event.data.object);
     const metadata = session.metadata ?? {};
+    if (metadata.application !== "byb" || metadata.namespace !== "byb_preview_v1") {
+      return { art: "ignorieren", eventId: event.id, objektId: session.id, eventTyp: event.type };
+    }
     const nutzerId = bybNutzer(metadata, session.client_reference_id);
     const customerId = session.customer;
     if (customerId === undefined || customerId === null) throw new Error("Stripe-Customer fehlt.");
@@ -130,6 +147,9 @@ export function stripeEventNormalisieren(eingabe: unknown): BillingBefehl {
 
   if (event.type === "invoice.paid") {
     const invoice = Invoice.parse(event.data.object);
+    if (!invoiceHatBybPreis(invoice)) {
+      return { art: "ignorieren", eventId: event.id, objektId: invoice.id, eventTyp: event.type };
+    }
     const subscriptionId = invoice.subscription ?? invoice.parent?.subscription_details?.subscription ?? undefined;
     return { art: "abo_monat_gutschreiben", eventId: event.id, objektId: invoice.id, customerId: invoice.customer, subscriptionId };
   }
@@ -141,7 +161,10 @@ export function stripeEventNormalisieren(eingabe: unknown): BillingBefehl {
       return { art: "ignorieren", eventId: event.id, objektId: abo.id, eventTyp: event.type };
     }
     const metadata = abo.metadata ?? {};
-    const nutzerId = metadata.application === "byb" ? metadata.nutzer_id : undefined;
+    if (metadata.application !== "byb") {
+      return { art: "ignorieren", eventId: event.id, objektId: abo.id, eventTyp: event.type };
+    }
+    const nutzerId = metadata.nutzer_id;
     return {
       art: "abo_status",
       eventId: event.id,
