@@ -1,10 +1,9 @@
 /**
- * Die Migration gegen Neon anwenden.
+ * Eine handgeschriebene Migration gegen Neon anwenden.
  *
- * Läuft **nur** in der CI, von Hand ausgelöst (workflow_dispatch). Nicht bei
- * jedem Push: eine Migration, die bei jedem Commit gegen die Datenbank läuft,
- * ist die Sorte Automatik, bei der irgendwann jemand ein `drop` durchrutschen
- * lässt und es niemand vorher gesehen hat.
+ * Läuft nur über den manuell ausgelösten GitHub-Workflow. Die Datei muss
+ * ausdrücklich aus der erlaubten Liste gewählt werden; dadurch wird eine alte
+ * Migration nicht versehentlich bei jedem späteren Lauf erneut abgespielt.
  */
 
 import { readFileSync } from "node:fs";
@@ -17,21 +16,26 @@ import { zugang } from "../config/zugaenge.js";
 import { entschaerfen } from "./entschaerfen.js";
 import { neon, projektWaehlen } from "./neon-api.js";
 
+const ERLAUBTE_MIGRATIONEN = new Set([
+  "001_grundschema.sql",
+  "002_protokoll_inhalt.sql",
+]);
+
+function migrationsdatei(): string {
+  const argument = process.argv.find((wert) => wert.startsWith("--datei="));
+  const datei = argument?.slice("--datei=".length) ?? "001_grundschema.sql";
+  if (!ERLAUBTE_MIGRATIONEN.has(datei)) {
+    throw new Error(`Unbekannte Migrationsdatei: ${datei}`);
+  }
+  return datei;
+}
+
 const schluessel = zugang("neonApiKey");
 const projekt = await projektWaehlen(schluessel);
+const datei = migrationsdatei();
 console.error(`Projekt: ${projekt.name} (${projekt.id})`);
+console.error(`Migration: ${datei}`);
 
-/**
- * Die Verbindungszeichenfolge fuer dieses Projekt.
- *
- * Bevorzugt `DATABASE_URL` aus den Secrets. Fehlt sie, wird sie ueber die
- * Neon-API geholt — der Schluessel, der das Projekt kennt, darf auch dessen
- * Verbindung nennen. Das erspart ein zweites Secret fuer dieselbe Sache.
- *
- * Sie wird **nie** ausgegeben. Eine Verbindungszeichenfolge traegt das
- * Passwort der Datenbank im Klartext; ein CI-Protokoll liest jeder mit
- * Repo-Zugriff.
- */
 async function verbindung(projektId: string): Promise<string> {
   const ausSecret = gesetzt("DATABASE_URL");
   if (ausSecret !== undefined) {
@@ -39,8 +43,6 @@ async function verbindung(projektId: string): Promise<string> {
     return ausSecret;
   }
 
-  // Vorgabe als Argument, nicht hinter einem `??`: so steht sie im Aufruf
-  // und geht nicht in einer Kette unter (config/umgebung.ts).
   const datenbank = optional("NEON_DATABASE", "neondb");
   const rolle = optional("NEON_ROLE", "neondb_owner");
   const daten = await neon(
@@ -61,50 +63,28 @@ async function verbindung(projektId: string): Promise<string> {
 }
 
 const sql = readFileSync(
-  fileURLToPath(new URL("./001_grundschema.sql", import.meta.url)),
+  fileURLToPath(new URL(`./${datei}`, import.meta.url)),
   "utf8",
 );
 
 const nurLesen = process.argv.includes("--trocken");
 if (nurLesen) {
-  console.error(`Trockenlauf: ${sql.split(";").length - 1} Anweisungen, nichts gesendet.`);
+  console.error(`Trockenlauf: ${datei} gelesen, nichts gesendet.`);
   process.exit(0);
 }
 
-// Direkte Postgres-Verbindung, nicht ueber die API.
-//
-// Der Weg ueber `/projects/{id}/query` war der naheliegende — er brauchte nur
-// den API-Schluessel und keinen Netzweg zur Datenbank. Er existiert nicht
-// mehr:
-//
-//   HTTP 410 — the /projects/{project_id}/query endpoint has been removed;
-//   migrate to a direct Postgres connection or the Neon serverless driver
-//
-// Ein 410 ist keine Stoerung, die sich mit einem zweiten Versuch erledigt.
-// Der Endpunkt ist weg, und der Anbieter sagt selbst, was stattdessen gilt.
 const klient = new Client({
   connectionString: await verbindung(projekt.id),
-  // Neon verlangt TLS. Ohne diese Zeile scheitert die Verbindung mit einer
-  // Meldung ueber Zertifikate, die wie ein Netzproblem aussieht.
   ssl: { rejectUnauthorized: true },
 });
 
 try {
   await klient.connect();
-  // Die Datei enthaelt `begin;` … `commit;` und geht als **eine** einfache
-  // Anfrage raus. Das ist Absicht: laeuft eine Migration Anweisung fuer
-  // Anweisung, kann sie auf halber Strecke stehen bleiben — etwa mit
-  // angelegter Tabelle, aber ohne Policy. Das ist der Zustand, den niemand
-  // bemerkt, weil alles zu funktionieren scheint.
   await klient.query(sql);
 } catch (fehler) {
-  // Die Meldung von Postgres nennt Zeile und Grund und ist das Nuetzlichste,
-  // was es hier gibt — aber sie kann Teile der Anfrage enthalten. Derselbe
-  // Filter wie bei den Antworten der Neon-API.
   throw new Error(`Migration abgebrochen: ${entschaerfen((fehler as Error).message)}`);
 } finally {
   await klient.end();
 }
 
-console.error("Schema angewendet.");
-console.error("Row Level Security ist auf jeder Tabelle eingeschaltet UND erzwungen.");
+console.error(`Migration angewendet: ${datei}`);

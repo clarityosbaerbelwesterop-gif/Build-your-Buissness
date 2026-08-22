@@ -1,16 +1,20 @@
 name: Neon
 
-# Die Migration gegen Neon anwenden — **von Hand ausgelöst**, nicht bei jedem
-# Push. Eine Migration, die bei jedem Commit gegen die Datenbank läuft, ist die
-# Sorte Automatik, bei der irgendwann ein `drop` durchrutscht und es niemand
-# vorher gesehen hat.
-#
-# Flo arbeitet nur auf dem iPad (USER.md). Deshalb ist der Auslöser ein Knopf
-# in der GitHub-Oberfläche: Actions → Neon → Run workflow.
+# Handgeschriebene Migration gegen Neon anwenden — ausschließlich manuell.
+# Der Lauf zeigt die ausgewählte Datei im Protokoll und verlangt zusätzlich das
+# Wort "anwenden". Damit bleibt Schemaänderung ein eigener, sichtbarer Schritt.
 
 on:
   workflow_dispatch:
     inputs:
+      datei:
+        description: "Welche Migration?"
+        required: true
+        type: choice
+        default: "002_protokoll_inhalt.sql"
+        options:
+          - "002_protokoll_inhalt.sql"
+          - "001_grundschema.sql"
       wirklich:
         description: 'Zum Anwenden "anwenden" eintippen. Alles andere ist ein Trockenlauf.'
         required: true
@@ -27,16 +31,13 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # Erst prüfen, dann anwenden. Der Selbsttest setzt die eigenen Angreifer
-      # auf die eigene Migration an — ohne ihn ginge ein Schema raus, das die
-      # Prüfung nicht besteht, die wir Kunden verkaufen.
-      - name: Schema prüfen
+      - name: Schema und DB-Logik prüfen
         run: npx vitest run db
 
       - name: Trockenlauf
         if: inputs.wirklich != 'anwenden'
         run: |
-          npm run migrieren:trocken
+          npm run migrieren:trocken -- --datei="${{ inputs.datei }}"
           echo "Nichts gesendet. Zum Anwenden den Lauf mit \"anwenden\" starten."
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -47,7 +48,7 @@ jobs:
 
       - name: Anwenden
         if: inputs.wirklich == 'anwenden'
-        run: npm run migrieren
+        run: npm run migrieren -- --datei="${{ inputs.datei }}"
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
