@@ -11,12 +11,12 @@ class Attrappe implements SqlVerbindung {
   readonly aufrufe: { sql: string; werte: unknown[] }[] = [];
   fehlerBei?: string;
 
-  async query(sql: string, werte: unknown[] = []): Promise<SqlErgebnis> {
+  query(sql: string, werte: unknown[] = []): Promise<SqlErgebnis> {
     this.aufrufe.push({ sql, werte });
     if (this.fehlerBei !== undefined && sql.includes(this.fehlerBei)) {
       throw new Error("absichtlicher Testfehler");
     }
-    return { rows: [] };
+    return Promise.resolve({ rows: [] });
   }
 }
 
