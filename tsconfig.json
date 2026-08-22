@@ -14,5 +14,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["protocol", "core", "attackers", "config", "models", "db"]
+  "include": ["protocol", "core", "attackers", "fixers", "config", "models", "db"]
 }
