@@ -2,41 +2,50 @@
 
 ## Haltung
 
-BYB sieht aus wie eine **Prüfstelle**, nicht wie ein Startup-Baukasten.
-Das Vorbild ist das Prüfprotokoll einer technischen Abnahme: ein Dokument, das
-gestempelt wird, mit Datum, Prüfer, Befund. Nüchtern, belegend, ernst.
+BYB sieht aus wie ein **ruhiger autonomer Leitstand**, nicht wie ein
+Startup-Baukasten und nicht wie ein reines Security-Dashboard.
 
-Bewusst **nicht**: Verlaufsflächen, schwebende Glaskarten, Bunt-auf-Dunkel,
-Neon-Akzente, Emoji in der Oberfläche, „✨ AI-powered". Das ist genau der Look,
-den unsere Zielgruppe von den Werkzeugen kennt, deren Ergebnisse sie nicht mehr
-vertrauen.
+Der Nutzer soll sofort zwei Dinge verstehen:
+
+1. **BYB arbeitet gerade für mich.**
+2. **Ich kann nachvollziehen, was es tut und jederzeit eingreifen.**
+
+Bewusst nicht: bunte AI-Deko, unlesbare Agenten-Logs, zehn Dashboards oder eine
+Oberfläche, die den Nutzer zu technischen Entscheidungen zwingt.
+
+## Visuelle Grundidee
+
+Die Hauptfläche ist der Chathub. Daneben oder darunter lebt ein klarer
+**Aktivitätsstrom**: Auftrag, Plan, laufende Aktion, Ergebnis, Freigabe und
+Credits. Technische Details sind aufklappbar, aber nicht die erste Ebene.
+
+Das Prüfprotokoll behält seine dokumentartige Gestaltung als besondere
+Beweisfläche. Es ist ein Teil des Leitstands, nicht dessen gesamtes Erscheinungsbild.
 
 ## Signatur
 
-**Der Stempel.** Jeder abgeschlossene Prüfschritt bekommt einen Stempelabdruck
-auf dem Protokoll — leicht rotiert, mit Zeitstempel und Prüf-ID. Das ist das
-eine Element, an das sich Leute erinnern. Alles andere bleibt still.
+**Der Statusbeleg.** Abgeschlossene und tatsächlich nachgewiesene Schritte dürfen
+einen zurückhaltenden Stempelabdruck bekommen — leicht rotiert, mit Zeitstempel
+und Aktions-ID. Ein Stempel bedeutet ausschließlich: dieser konkrete Schritt ist
+belegt abgeschlossen. Er ist kein allgemeines „sicher"-Siegel.
 
-Es gibt genau eine Bewegung im Produkt: der Stempel setzt auf, wenn ein
-Prüfschritt fertig ist. Sonst keine Animationen außer Zustandsübergängen
-unter 150 ms. `prefers-reduced-motion` wird respektiert.
+Animationen zeigen nur Zustandswechsel oder echte laufende Arbeit. Keine
+Dekorationsbewegung. `prefers-reduced-motion` wird respektiert.
 
 ## Farben
 
 ```
 --ink        #0F1720   Grundfläche, Ruhezustand
 --blueprint  #17263A   Panels, erhöhte Flächen
---paper      #E6E4DD   Protokoll- und Dokumentflächen
+--paper      #E6E4DD   Belege, Prüfprotokolle, Freigabedetails
 --stahl      #8894A3   Sekundärtext, Rahmen, Beschriftungen
---befund     #E4572E   Fund, offener Punkt, Warnung
---siegel     #3F7D5A   geprüft und behoben
+--befund     #E4572E   Fund, Blockade, offene Freigabe
+--siegel     #3F7D5A   nachgewiesen abgeschlossen / behoben
 ```
 
 Regeln:
-- `--befund` und `--siegel` **nur** für Prüfergebnisse. Nie für Knöpfe, nie für
-  Verläufe, nie dekorativ.
-- Protokollflächen sind `--paper` auf `--ink`. Der Kontrast Dokument-auf-Dunkel
-  ist die visuelle Grundidee: das Papier liegt auf dem Prüfstand.
+- `--befund` und `--siegel` tragen Bedeutung, nie Dekoration.
+- Dokumentflächen sind `--paper` auf `--ink`.
 - Kontrast mindestens 4.5:1 für Fließtext, 3:1 für große Schrift.
 
 ## Schrift
@@ -44,48 +53,87 @@ Regeln:
 ```
 Display   Archivo, versal, eng gesperrt (-0.02em), Gewicht 600–700
 Fließtext Public Sans, Gewicht 400/500
-Beleg     JetBrains Mono — Logs, IDs, Zeitstempel, Codeauszüge
+Beleg     JetBrains Mono — IDs, Zeitstempel, technische Details
 ```
 
 Skala: 12 / 14 / 16 / 20 / 28 / 40 / 64.
-Display nur für Zustandsüberschriften und Stempel. Zahlen im Protokoll immer
-mono, damit Spalten stehen.
 
 ## Raster und Form
 
-- 8-px-Raster durchgehend. Innenabstand Panels 24, Dokumentflächen 32.
-- Eckenradius: 2 px auf Dokumentflächen, 4 px auf Knöpfen. Nichts ist rund.
-- Trennlinien 1 px `--stahl` bei 24 % Deckkraft — nur wo sie eine echte Grenze
-  markieren, nicht als Dekoration.
-- Maximale Textbreite 68 Zeichen.
+- 8-px-Raster durchgehend.
+- Innenabstand Panels 24, Dokumentflächen 32.
+- Eckenradius 2–4 px; nichts ist weich-rund nur weil es „AI" ist.
+- Trennlinien markieren echte Grenzen.
+- Maximale Textbreite 68 Zeichen für längere Erklärungen.
 
-## Bausteine
+## Wichtigste Bausteine
 
-**Protokollzeile** — die wichtigste Komponente:
+**Auftragskopf**
 ```
-[Stempel]  KATEGORIE            Befund: 2   Behoben: 2   Offen: 0
-           ein Satz Klartext, was möglich war und was geändert wurde
-           09:14:22  ID 7f3a1c
+AUFTRAG 8D2F      läuft
+Baue die Zahlungsseite und veröffentliche sie nach Prüfung.
+Credits: 84 verbraucht · 120–160 geschätzt
 ```
 
-**Knopf**: rechteckig, `--paper` auf `--ink` für die Hauptaktion, exakt eine
-Hauptaktion pro Bildschirm. Beschriftung ist ein Verb im Infinitiv:
-„Plan bestätigen", „Veröffentlichen".
+**Aktivitätszeile**
+```
+[Status]  VERCEL DEPLOY       abgeschlossen
+          Preview gebaut und Smoke-Test bestanden.
+          09:14:22  Aktion 7f3a1c
+```
 
-**Leerer Zustand**: keine Illustration, kein Spruch. Ein Satz, was als Nächstes
-zu tun ist, und das Eingabefeld.
+**Freigabekarte**
+```
+VERÖFFENTLICHUNG
+BYB möchte die geprüfte Fassung live schalten.
+[Veröffentlichen]   [Dauerfreigabe für Deployments]
+```
 
-**Fehler**: `--befund` als 2-px-Linie links, Klartext was passiert ist und was
-jetzt geht. Keine Entschuldigung, keine Fehlernummer ohne Erklärung daneben.
+**Prüfzeile**
+```
+[Stempel]  AUTHENTIFIZIERUNG   Gefunden: 2   Behoben: 2   Offen: 0
+           Ein Satz Klartext, was möglich war und was geändert wurde.
+```
 
-## Qualitätsboden (ohne Ausnahme)
+**Knopf**: genau eine visuell dominante Hauptaktion pro Entscheidung. Verb im
+Infinitiv: „Plan bestätigen", „Veröffentlichen", „Budget freigeben".
+
+**Laufende Arbeit**: kein anonymer Spinner. Immer benennen, was BYB gerade tut
+und welcher Schritt davor/danach steht.
+
+**Fehler/Blockade**: `--befund` als 2-px-Linie links. Klartext: was passiert ist,
+was BYB bereits versucht hat, was blockiert und ob der Nutzer etwas tun muss.
+
+## Chathub
+
+Ein Eingabefeld für Text oder Sprache bleibt der primäre Steuerkanal. Der Nutzer
+kann während eines laufenden Auftrags neue Anweisungen geben. BYB zeigt, ob die
+Anweisung den aktuellen Plan ergänzt, ersetzt oder eine laufende Aktion stoppen
+würde.
+
+Keine technischen Assistenten mit sieben Formularseiten. Verbindungen wie
+GitHub/Vercel/Neon/Supabase/Stripe erscheinen als kompakte Setup-Karten und
+werden danach nur gezeigt, wenn Zustand oder Freigabe relevant ist.
+
+## Credits
+
+Credits werden ruhig, aber jederzeit auffindbar gezeigt:
+
+- Restguthaben im globalen Rahmen
+- Schätzung vor größeren Aufträgen
+- tatsächlicher Verbrauch pro Aktion
+- Warnung bevor ein Auftrag an einer Credit-Grenze stoppen würde
+
+Keine künstlich blinkenden Verbrauchsanzeigen.
+
+## Qualitätsboden
 
 Bis 375 px Breite bedienbar, sichtbarer Tastaturfokus, Zustände nicht allein
-über Farbe kodiert (Stempelform trägt die Bedeutung mit), Ladezustände zeigen
-was gerade läuft statt eines Spinners.
+über Farbe kodiert, Screenreader-taugliche Statusmeldungen, verständliche
+Freigabedialoge und keine versteckten externen Nebenwirkungen.
 
 ## Wix
 
-Wix dient intern zum Entwerfen und Vergleichen von Layouts. **Nichts von Wix
-geht in das Produkt** — kein Export, keine Vorlage, kein Einbetten. Was hier
-steht, gewinnt gegen jede Wix-Vorlage.
+Wix dient intern zum Entwerfen und Vergleichen von Layouts. Nichts von Wix geht
+in das Produkt. Was in `CHATHUB.md` und dieser Datei steht, gewinnt gegen jede
+Vorlage.
