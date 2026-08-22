@@ -11,8 +11,10 @@ on:
         description: "Welche Migration?"
         required: true
         type: choice
-        default: "002_protokoll_inhalt.sql"
+        default: "004_connector_hub.sql"
         options:
+          - "004_connector_hub.sql"
+          - "003_control_plane.sql"
           - "002_protokoll_inhalt.sql"
           - "001_grundschema.sql"
       wirklich:
