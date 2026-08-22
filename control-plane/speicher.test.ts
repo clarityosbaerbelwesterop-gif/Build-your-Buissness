@@ -41,9 +41,9 @@ function leereVerbindung(): { readonly db: SqlVerbindung; readonly aufrufe: stri
   return {
     aufrufe,
     db: {
-      async query(sql: string) {
+      query(sql: string) {
         aufrufe.push(sql);
-        return { rows: [] };
+        return Promise.resolve({ rows: [] });
       },
     },
   };
