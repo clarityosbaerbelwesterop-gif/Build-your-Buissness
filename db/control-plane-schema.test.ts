@@ -28,7 +28,7 @@ describe("Migration 003", () => {
   it("hält die Worker-Rolle ohne Login und ohne RLS-Bypass", () => {
     expect(sql).toMatch(/create role byb_worker[\s\S]*?nologin/);
     expect(sql).toMatch(/create role byb_worker[\s\S]*?nobypassrls/);
-    expect(sql).not.toMatch(/create role byb_worker[\s\S]*?bypassrls;/);
+    expect(sql).not.toMatch(/\n\s+bypassrls;/);
   });
 
   it("gibt dem Worker keine Rechte auf bestehende Nutzerdatentabellen", () => {
