@@ -151,7 +151,13 @@ export function stripeEventNormalisieren(eingabe: unknown): BillingBefehl {
       return { art: "ignorieren", eventId: event.id, objektId: invoice.id, eventTyp: event.type };
     }
     const subscriptionId = invoice.subscription ?? invoice.parent?.subscription_details?.subscription ?? undefined;
-    return { art: "abo_monat_gutschreiben", eventId: event.id, objektId: invoice.id, customerId: invoice.customer, subscriptionId };
+    return {
+      art: "abo_monat_gutschreiben",
+      eventId: event.id,
+      objektId: invoice.id,
+      customerId: invoice.customer,
+      ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    };
   }
 
   if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
@@ -170,12 +176,12 @@ export function stripeEventNormalisieren(eingabe: unknown): BillingBefehl {
       eventId: event.id,
       objektId: abo.id,
       customerId: abo.customer,
-      nutzerId,
       subscriptionId: abo.id,
       planKey: plan.key,
       status: event.type === "customer.subscription.deleted" ? "canceled" : aboStatus(abo.status),
-      periodeStart: abo.current_period_start,
-      periodeEnde: abo.current_period_end,
+      ...(nutzerId === undefined ? {} : { nutzerId }),
+      ...(abo.current_period_start === undefined ? {} : { periodeStart: abo.current_period_start }),
+      ...(abo.current_period_end === undefined ? {} : { periodeEnde: abo.current_period_end }),
     };
   }
 
