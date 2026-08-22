@@ -11,10 +11,10 @@ function verbindungMitAufzeichnung(fehlermodus = false): {
   return {
     sql,
     db: {
-      async query(abfrage: string) {
+      query(abfrage: string) {
         sql.push(abfrage);
-        if (fehlermodus && abfrage === "arbeit") throw new Error("kaputt");
-        return { rows: [] };
+        if (fehlermodus && abfrage === "arbeit") return Promise.reject(new Error("kaputt"));
+        return Promise.resolve({ rows: [] });
       },
     },
   };
