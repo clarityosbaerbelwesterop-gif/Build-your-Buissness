@@ -2,27 +2,20 @@
  * RLS-Nachweis gegen einen frischen Neon-Zweig.
  *
  * Ablauf: Zweig anlegen → geerbtes BYB-Schema auf diesem Testzweig entfernen →
- * Migration anwenden → Mandantentrennung prüfen → Gegenprobe → **Zweig löschen,
- * in jedem Fall**.
- *
- * Warum ein eigener Zweig und nicht die vorhandene Datenbank: die Prüfung legt
- * Zeilen an, ändert und löscht. CLAUDE.md §2.3 lässt das nur gegen etwas zu,
- * das im selben Lauf entstanden ist — „nie gegen Produktion, nie gegen etwas
- * mit echten Nutzerdaten". Ein Zweig bei Neon kostet Sekunden; die Regel
- * dafür zu beugen kostet irgendwann Kundendaten.
+ * Migration anwenden → nicht-privilegierte Eigentümerrolle anlegen →
+ * Mandantentrennung prüfen → Gegenprobe → **Rolle und Zweig löschen**.
  *
  * Neon-Zweige erben den Stand ihres Elternzweigs. Deshalb ist „frischer Zweig"
  * nicht dasselbe wie „leere Datenbank": ohne den Reset unten würde die
- * Migration gegen bereits vorhandene Tabellen und Policies laufen. Der Reset
- * löscht ausschließlich die vier BYB-Tabellen auf dem gerade erzeugten
- * Testzweig. Danach beweist der Lauf sowohl die Migration als auch die Policies
- * aus dem aktuellen PR statt nur den bereits deployten Stand des Elternzweigs.
+ * Migration gegen bereits vorhandene Tabellen und Policies laufen.
  *
- * Warum kein vitest: der Zweig muss auch dann verschwinden, wenn mitten in der
- * Prüfung etwas wirft. Ein `finally` um den ganzen Ablauf ist dafür
- * verlässlicher als eine Aufräumregel im Testläufer, die bei einem harten
- * Abbruch nicht mehr drankommt. Und die Prüfung braucht Zugangsdaten und Netz
- * — sie gehört nicht in `npm test`, das in jedem Klon laufen muss.
+ * Der Neon-Verbindungsnutzer ist für Verwaltung gedacht und kann RLS umgehen.
+ * Ein Verhaltenstest unter diesem Nutzer produziert deshalb Scheintreffer,
+ * selbst wenn ENABLE, FORCE und Policy korrekt sind. Der Nachweis erstellt auf
+ * dem isolierten Testzweig eine Rolle ohne SUPERUSER/BYPASSRLS, macht sie zum
+ * Eigentümer der Testtabellen und führt die Nutzeraktionen unter `SET ROLE`
+ * aus. Genau dadurch wird auch fehlendes FORCE sichtbar: ein Tabellenbesitzer
+ * ohne FORCE umgeht RLS, derselbe Besitzer mit FORCE nicht.
  */
 
 import { readFileSync } from "node:fs";
@@ -41,14 +34,8 @@ const SCHEMA = readFileSync(
   "utf8",
 );
 
-/** Die vier Tabellen mit Mandantenbezug — dieselben wie in der Migration. */
 const TABELLEN = ["laeufe", "protokolle", "befunde", "runden"] as const;
 
-/**
- * Neon kopiert beim Branching auch das vorhandene Schema. Für den Nachweis
- * brauchen wir aber den Zustand „vor dieser Migration". Gelöscht wird nur auf
- * dem im selben Lauf angelegten Zweig und nur das eigene BYB-Grundschema.
- */
 const RESET_EIGENES_SCHEMA = `
   drop table if exists runden cascade;
   drop table if exists befunde cascade;
@@ -56,13 +43,32 @@ const RESET_EIGENES_SCHEMA = `
   drop table if exists laeufe cascade;
 `;
 
-/**
- * Wie man in jeder Tabelle eine Zeile für einen Mandanten anlegt.
- *
- * Die Tabellen hängen aneinander (`protokolle` → `laeufe`, `befunde` und
- * `runden` → `protokolle`). Für jeden Mandanten wird deshalb erst ein Lauf und
- * ein Protokoll gebraucht; die merkt sich diese Karte.
- */
+function sqlIdent(name: string): string {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(name)) throw new Error("Ungueltiger SQL-Bezeichner.");
+  return `"${name}"`;
+}
+
+async function pruefrolleAnlegen(v: Verbindung, rollenname: string): Promise<void> {
+  const rolle = sqlIdent(rollenname);
+  await v.query(
+    `create role ${rolle} nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls`,
+  );
+  await v.query(`grant ${rolle} to current_user`);
+  await v.query(`grant usage on schema public, auth to ${rolle}`);
+  await v.query(`grant execute on function auth.nutzer_kennung() to ${rolle}`);
+  for (const tabelle of TABELLEN) {
+    await v.query(`alter table ${sqlIdent(tabelle)} owner to ${rolle}`);
+  }
+}
+
+async function pruefrolleAufraeumen(v: Verbindung, rollenname: string): Promise<void> {
+  const rolle = sqlIdent(rollenname);
+  await v.query("reset role").catch(() => undefined);
+  await v.query(`reassign owned by ${rolle} to current_user`).catch(() => undefined);
+  await v.query(`drop owned by ${rolle}`).catch(() => undefined);
+  await v.query(`drop role if exists ${rolle}`).catch(() => undefined);
+}
+
 function anlegerFuer(
   v: Verbindung,
   tabelle: string,
@@ -123,8 +129,6 @@ function anlegerFuer(
     case "runden":
       return async (mandant) => {
         const { protokoll } = await elternHolen(mandant);
-        // `nummer` ist je Protokoll eindeutig — je Mandant ein eigenes
-        // Protokoll, also darf beide Male 1 stehen.
         return eineZeile(
           v,
           `insert into runden (protokoll_id, nutzer_id, nummer)
@@ -150,23 +154,18 @@ async function eineZeile(
   return id;
 }
 
-/**
- * Die Gegenprobe: hat die Prüfung überhaupt Zähne?
- *
- * Sie legt zwei Tabellen an, denen genau das fehlt, was die Migration richtig
- * macht — einer ohne `FORCE`, einer ganz ohne Policy — und erwartet, dass die
- * Prüfung dort **anschlägt**. Ohne diesen Schritt wäre ein grüner Lauf auch
- * dann grün, wenn die Prüfung gar nichts prüft; das ist der Fehler, der bei
- * einem Sicherheitsnachweis am teuersten ist.
- */
-async function gegenprobe(v: Verbindung): Promise<string[]> {
+async function gegenprobe(
+  v: Verbindung,
+  rollenname: string,
+): Promise<string[]> {
   const klagen: string[] = [];
+  const rolle = sqlIdent(rollenname);
 
   const faelle = [
     {
       name: "ohne_force",
       sql: `
-        create table if not exists probe_ohne_force (
+        create table probe_ohne_force (
           id uuid primary key default gen_random_uuid(),
           nutzer_id text not null
         );
@@ -179,7 +178,7 @@ async function gegenprobe(v: Verbindung): Promise<string[]> {
     {
       name: "ohne_policy",
       sql: `
-        create table if not exists probe_ohne_policy (
+        create table probe_ohne_policy (
           id uuid primary key default gen_random_uuid(),
           nutzer_id text not null
         );`,
@@ -189,9 +188,13 @@ async function gegenprobe(v: Verbindung): Promise<string[]> {
 
   for (const fall of faelle) {
     const tabelle = `probe_${fall.name}`;
+    await v.query("reset role");
     await v.query(fall.sql);
+    await v.query(`alter table ${sqlIdent(tabelle)} owner to ${rolle}`);
+    await v.query(`set role ${rolle}`);
+
     const anlegen = (mandant: string): Promise<string> =>
-      eineZeile(v, `insert into ${tabelle} (nutzer_id) values ($1) returning id`, [mandant]);
+      eineZeile(v, `insert into ${sqlIdent(tabelle)} (nutzer_id) values ($1) returning id`, [mandant]);
     const verstoesse = await tabellePruefen(v, tabelle, anlegen);
     if (verstoesse.length === 0) {
       klagen.push(
@@ -204,24 +207,24 @@ async function gegenprobe(v: Verbindung): Promise<string[]> {
         + `wie erwartet (${fall.warum}).`,
       );
     }
-    await v.query(`drop table if exists ${tabelle}`);
+
+    await v.query("reset role");
+    await v.query(`drop table if exists ${sqlIdent(tabelle)}`);
   }
   return klagen;
 }
-
-// ============================================================================
-// Ablauf
-// ============================================================================
 
 const schluessel = pflicht("NEON_API_KEY", "einen Zweig fuer den RLS-Nachweis anlegen");
 const projekt = await projektWaehlen(schluessel);
 console.error(`Projekt: ${projekt.name} (${projekt.id})`);
 
 const name = `rls-nachweis-${Date.now()}`;
+const rollenname = `byb_rls_probe_${Date.now()}`;
 const zweig = await zweigAnlegen(projekt.id, schluessel, name);
 console.error(`Zweig angelegt: ${zweig.name} (${zweig.id})`);
 
 let fehlgeschlagen = false;
+let rolleAngelegt = false;
 const klient = new Client({
   connectionString: zweig.verbindung,
   ssl: { rejectUnauthorized: true },
@@ -234,6 +237,11 @@ try {
   await klient.query(SCHEMA);
   console.error("Schema aus dem aktuellen Branch auf dem Testzweig angewendet.");
 
+  await pruefrolleAnlegen(klient, rollenname);
+  rolleAngelegt = true;
+  await klient.query(`set role ${sqlIdent(rollenname)}`);
+  console.error("RLS-Pruefung laeuft als nicht-privilegierter Tabellenbesitzer.");
+
   const alle: Verstoss[] = [];
   const eltern = new Map<string, { lauf: string; protokoll: string }>();
   for (const tabelle of TABELLEN) {
@@ -245,7 +253,7 @@ try {
   console.error(bericht(alle, [...TABELLEN]));
   console.error("");
 
-  const klagen = await gegenprobe(klient);
+  const klagen = await gegenprobe(klient, rollenname);
   for (const klage of klagen) console.error(`  ${klage}`);
 
   fehlgeschlagen = alle.length > 0 || klagen.length > 0;
@@ -254,17 +262,16 @@ try {
     console.error(
       `Geprueft: kein Mandant erreicht die Zeilen eines anderen — lesend, `
       + `aendernd, loeschend, und keiner kann auf fremde Kennung schreiben. `
-      + `Die Gegenprobe schlaegt bei fehlendem FORCE und fehlender Policy an, `
-      + `die Pruefung hat also Zaehne. Mandant A war ${MANDANT_A}.`,
+      + `Die Gegenprobe schlaegt bei fehlendem FORCE und fehlender Policy an. `
+      + `Mandant A war ${MANDANT_A}.`,
     );
   }
 } catch (fehler) {
   fehlgeschlagen = true;
   console.error(`RLS-Nachweis abgebrochen: ${entschaerfen((fehler as Error).message)}`);
 } finally {
+  if (rolleAngelegt) await pruefrolleAufraeumen(klient, rollenname);
   await klient.end().catch(() => undefined);
-  // Der Zweig verschwindet auch, wenn oben etwas geworfen hat. Ein Zweig, den
-  // niemand aufraeumt, kostet Geld und steht beim naechsten Lauf im Weg.
   await zweigLoeschen(projekt.id, schluessel, zweig.id);
   console.error(`Zweig geloescht: ${zweig.name}`);
 }
