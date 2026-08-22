@@ -14,27 +14,7 @@
  */
 
 import type { Angreifer, Datei, RoherBefund, Ziel } from "../core/schnittstellen.js";
-
-/**
- * Muster mit einer Form, die man nicht versehentlich tippt.
- *
- * Bewusst eng gehalten. Eine breite Suche nach `key`, `secret` oder `token`
- * findet in jedem Projekt Dutzende Stellen, von denen keine ein Schlüssel ist —
- * und ein Prüfbericht voller Fehlalarme wird nicht gelesen, sondern
- * weggeklickt. Lieber ein echter Fund weniger als zehn falsche.
- */
-const SCHLUESSEL: readonly { readonly name: string; readonly muster: RegExp }[] = [
-  { name: "OpenAI-Schlüssel", muster: /\bsk-[A-Za-z0-9]{20,}\b/ },
-  { name: "NVIDIA-Schlüssel", muster: /\bnvapi-[A-Za-z0-9_-]{20,}\b/ },
-  { name: "Neon-Schlüssel", muster: /\bnapi_[A-Za-z0-9]{20,}\b/ },
-  { name: "GitHub-Token", muster: /\bghp_[A-Za-z0-9]{30,}\b/ },
-  { name: "Stripe-Schlüssel", muster: /\b[rs]k_live_[A-Za-z0-9]{20,}\b/ },
-  { name: "privater Schlüssel", muster: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
-  {
-    name: "Datenbank-Zugang mit Passwort",
-    muster: /\bpostgres(?:ql)?:\/\/[^:\s]+:[^@\s]+@/,
-  },
-];
+import { zugangsdatenTreffer } from "./zugangsdaten-muster.js";
 
 /**
  * Dateien, deren Inhalt im Browser landet.
@@ -71,18 +51,16 @@ function pruefen(ziel: Ziel): RoherBefund[] {
     if (NUR_BEISPIEL.test(datei.pfad)) continue;
     const oeffentlich = IM_BROWSER.test(datei.pfad);
 
-    for (const { name, muster } of SCHLUESSEL) {
-      const treffer = muster.exec(datei.inhalt);
-      if (treffer === null) continue;
-      const zeile = zeileVon(datei.inhalt, treffer.index);
+    for (const treffer of zugangsdatenTreffer(datei.inhalt)) {
+      const zeile = zeileVon(datei.inhalt, treffer.start);
       funde.push({
         schweregrad: oeffentlich ? "kritisch" : "hoch",
         klartext: oeffentlich
-          ? `Ein ${name} steht in einer Datei, die im Browser landet. Jeder Besucher `
+          ? `Ein ${treffer.regel.name} steht in einer Datei, die im Browser landet. Jeder Besucher `
             + `deiner Seite kann ihn auslesen und in deinem Namen verwenden.`
-          : `Ein ${name} steht im Quelltext. Jeder mit Zugriff auf das Repository `
+          : `Ein ${treffer.regel.name} steht im Quelltext. Jeder mit Zugriff auf das Repository `
             + `kann ihn lesen und in deinem Namen verwenden.`,
-        nachweis: nachweis(datei, zeile, name),
+        nachweis: nachweis(datei, zeile, treffer.regel.name),
       });
     }
 
