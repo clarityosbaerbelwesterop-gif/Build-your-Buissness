@@ -31,6 +31,7 @@ const api = new GitHubRestApi(token);
 const vorher = await githubRepoNachweis(api, repo);
 const suffix = env("GITHUB_RUN_ID") ?? String(Date.now());
 let zweig: GitHubArbeitszweig | undefined;
+let ausfuehrungsFehler: unknown;
 
 try {
   zweig = await githubArbeitszweigAnlegen(
@@ -56,10 +57,14 @@ try {
   console.error(
     `Credential: ${dauerhaft === undefined ? "kurzlebiger GitHub-Actions-Token" : "BYB_GITHUB_LIVE_TOKEN"}`,
   );
-} finally {
-  if (zweig !== undefined) {
-    await githubArbeitszweigLoeschen(api, zweig);
+} catch (fehler) {
+  ausfuehrungsFehler = fehler;
+}
 
+let cleanupFehler: unknown;
+if (zweig !== undefined) {
+  try {
+    await githubArbeitszweigLoeschen(api, zweig);
     try {
       await api.ref(repo, zweig.branch);
       throw new Error("Der temporäre BYB-Arbeitsbranch konnte nicht vollständig entfernt werden.");
@@ -67,5 +72,16 @@ try {
       if (!istGitHubNichtGefunden(fehler)) throw fehler;
     }
     console.error(`Temporärer Branch gelöscht: ${zweig.branch}`);
+  } catch (fehler) {
+    cleanupFehler = fehler;
   }
 }
+
+if (ausfuehrungsFehler !== undefined && cleanupFehler !== undefined) {
+  throw new AggregateError(
+    [ausfuehrungsFehler, cleanupFehler],
+    "GitHub-Write-Nachweis und anschließender Cleanup sind fehlgeschlagen.",
+  );
+}
+if (cleanupFehler !== undefined) throw cleanupFehler;
+if (ausfuehrungsFehler !== undefined) throw ausfuehrungsFehler;
