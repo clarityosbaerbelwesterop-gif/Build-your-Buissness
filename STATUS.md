@@ -1,15 +1,16 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M0.9 ist in PR #11 gebaut und gegen einen kurzlebigen Neon-Zweig nachgewiesen.**
+Stand: **M1.0 ist in PR #12 gebaut und nachgewiesen.**
 
 - M0.5 / PR #7 ist in `main` (`234dbe33`).
 - M0.6 / PR #8 ist in `main` (`8776c66d`).
 - M0.7 / PR #9 ist in `main` (`c5a7336a`).
 - M0.8 / PR #10 ist in `main` (`95015e15`).
-- M0.9 liegt auf `m09-persistent-control-plane`.
-- Auf dem geprüften M0.9-Code-Head `54cab274` sind CI, Geheimnisse, Sprache,
-  RLS-Nachweis, Backend-Nachweis und der neue Control-Plane-Nachweis grün.
-- CI: **20 Testdateien / 237 Tests**, Lint und TypeScript grün,
+- M0.9 / PR #11 ist in `main` (`197fc981`).
+- M1.0 liegt auf `m10-connector-hub-github-executor`; PR #12 ist noch nicht gemergt.
+- Auf dem geprüften M1.0-Head `9b7beff5` sind CI, Geheimnisse, Sprache,
+  Backend-Nachweis, Control-Plane-Nachweis und GitHub-Connector-Nachweis grün.
+- CI: **23 Testdateien / 251 Tests**, Lint und TypeScript grün,
   `npm audit --audit-level=high`: **0 bekannte Schwachstellen**.
 
 ## Produktkern
@@ -18,176 +19,201 @@ Stand: **M0.9 ist in PR #11 gebaut und gegen einen kurzlebigen Neon-Zweig nachge
 
 > **Vom Repo bis zum Deploy bis zum Werbespot — BYB macht alles für dich.**
 
-Der Nutzer verbindet Systeme und wählt die Ressourcen, auf denen BYB arbeiten
-darf. BYB übersetzt ein Ziel in einen Aktionsgraph, führt freigegebene Arbeit
-möglichst autonom aus und dokumentiert Zustände, Ergebnisse, Kosten und
-Blockaden. Das Prüfprotokoll ist dabei Audit-/Trust-Layer, nicht das gesamte
-Produkt.
+Der Nutzer soll nicht technische Aufträge verwalten. Er beschreibt ein Ziel und
+verbindet einmal die Systeme, auf denen BYB arbeiten darf. Der interne Auftrag
+ist nur die persistente Arbeitseinheit, mit der BYB Ausführung, Wiederaufnahme,
+Fehler, Credits und Activity nachvollziehbar macht.
 
-## Was technisch steht
+## Bedienmodell des Connector Hubs
 
-| Bereich | Stand |
-|---|---|
-| `control-plane/v1.ts` | Vertrag für Projekte, Verbindungen, Aufträge, Aktionen, Freigaben, Credits und Activity Log. |
-| `control-plane/speicher.ts` | Persistiert den kanonischen Auftrag, projiziert Aktionen/Ereignisse und verwaltet Worker-Leases. |
-| `db/003_control_plane.sql` | RLS-geschützte Control-Plane-Tabellen plus eng begrenzte Worker-Rolle. |
-| `db/worker-kontext.ts` | Führt Hintergrundarbeit transaktional als `byb_worker` aus. |
-| `db/control-plane-nachweis.ts` | Echter Persistenz-/Lease-Nachweis auf einem kurzlebigen Neon-Zweig. |
-| `auth/neon-jwt.ts` | Kryptografische Neon-Auth-JWT-Prüfung über JWKS. |
-| `db/protokoll-speicher.ts` | Atomare Persistenz des Debug-/Security-Protokolls. |
-| `core/orchestrator.ts` | Angreifen → fixen → Änderungen übernehmen → erneut prüfen. |
-| `models/` | NVIDIA-Modellzugriff mit Rollen, Zeitgrenzen und Retry-Verhalten. |
+Der Nutzer verbindet einen Anbieter per OAuth, MCP oder einem passenden
+anbieterabhängigen Credential-Verfahren. Danach lädt BYB die verfügbaren
+Ressourcen und der Nutzer wählt konkret aus, welche Ressource BYB verwenden darf.
 
-## M0.9 — persistente Control Plane
+Der aktuell modellierte Zielzustand ist:
 
-### Kanonischer Auftrag und Projektionen
+- **GitHub** → Repository auswählen
+- **Neon oder Supabase** → genau ein Backend-Projekt auswählen
+- **Vercel** → Projekt auswählen
+- **Stripe** → Payment-Konto auswählen
+- **Higgsfield** → Workspace für Werbemittel auswählen
+- **Meta Ads** → Werbekonto als Veröffentlichungsziel auswählen
+- **TikTok Ads** → Werbekonto als Veröffentlichungsziel auswählen
+- **YouTube** → Kanal als Veröffentlichungsziel auswählen
+- **Google Ads** → Werbekonto als Veröffentlichungsziel auswählen
+- **Google Search Console** → Property für Indexierung auswählen
+- **Wix** → Site für Landingpage-Arbeit auswählen
 
-`steuer_auftraege.inhalt` speichert den vollständigen Control-Plane-v1-Auftrag
-als kanonisches JSON. `steuer_aktionen` ist die relationale Projektion für
-Scheduling, Freigaben, Credits und Leases. `steuer_ereignisse` hält den
-Activity-Stream.
+Secrets, Access-Tokens und Refresh-Tokens gehören **nicht** in den
+Control-Plane-/Connector-Datensatz. Dort liegen nur stabile Konto- und
+Ressourcenreferenzen. Echte Credentials bleiben in GitHub Secrets bzw. später
+im dafür vorgesehenen Connector-Secret-Store.
 
-Alle drei Tabellen haben `ENABLE ROW LEVEL SECURITY` und `FORCE ROW LEVEL
-SECURITY`.
+## M1.0 — Connector Hub v1
 
-Der Nutzerpfad läuft als `byb_app` und bleibt über
-`nutzer_id = auth.nutzer_kennung()` mandantengebunden.
+`connector-hub/v1.ts` führt einen strikten Vertrag für Verbindungen,
+Ressourcen und die konkrete Werkzeugauswahl ein.
 
-### Hintergrundworker
+Ein Unternehmens-Setup enthält aktuell:
 
-Migration 003 führt `byb_worker` ein als:
+1. GitHub-Repo
+2. genau ein Backend: Neon **oder** Supabase
+3. Vercel-Projekt
+4. optional Stripe
+5. optional Search Console
+6. optional Wix
+7. optional Werbung: Higgsfield als Creative-Quelle plus mindestens ein
+   Veröffentlichungsziel aus Meta Ads, TikTok Ads, YouTube oder Google Ads
 
-- `NOLOGIN`
-- `NOSUPERUSER`
-- `NOCREATEDB`
-- `NOCREATEROLE`
-- `NOINHERIT`
-- `NOBYPASSRLS`
+`werkzeugeAufloesen()` prüft, dass jede ausgewählte Ressource tatsächlich zur
+gewählten Verbindung gehört, dass der Anbieter stimmt und dass die Verbindung
+arbeitsbereit ist. Doppelte Werbeziele werden abgelehnt.
 
-Die Rolle erhält ausschließlich auf den neuen Control-Plane-Tabellen die für
-Scheduling nötigen Rechte und eigene explizite RLS-Policies. Sie erhält keine
-Rechte auf `laeufe`, `protokolle`, `befunde` oder `runden` und ist kein
-allgemeiner Service-Role-Ersatz.
+Der Vertrag ist `.strict()`: unbekannte Felder wie rohe Tokens werden nicht
+angenommen.
 
-### Leases und Wiederaufnahme
+## Worker-Runtime
 
-`naechsteAktionLeasen()` sucht Aufträge mit `FOR UPDATE SKIP LOCKED`. Eine
-interne oder bereits freigegebene startbare Aktion wird atomar auf `laeuft`
-gesetzt und bekommt ein zufälliges Lease-Token, Ablaufzeit, Worker-ID und einen
-Versuchszähler.
+`worker/runtime.ts` verbindet die persistente M0.9-Queue erstmals mit
+Executoren:
 
-- Eine aktive Lease wird nicht doppelt vergeben.
-- Ein Worker kann seine Lease nur mit passendem, noch aktivem Token erneuern.
-- Nach Lease-Ablauf darf ein anderer Worker die laufende Aktion mit neuem Token
-  übernehmen.
-- Ein alter Worker kann mit seinem inzwischen ungültigen Token nicht mehr
-  abschließen.
-- Abschluss, tatsächliche Credits, Auftrag, Aktionsprojektion und Activity-Log
-  werden gemeinsam in einer Transaktion aktualisiert.
-- Freigaben werden ebenfalls unter Auftrags-Sperre persistent angewendet.
+1. Aktion leasen
+2. Lease erneuern
+3. passenden Executor aufrufen
+4. Ergebnis und tatsächliche Credits über die aktive Lease persistent
+   abschließen
 
-Damit ist die **Persistenz- und Koordinationsgrundlage** für „Fenster schließen
-und später weiterarbeiten“ vorhanden. Noch nicht vorhanden ist ein dauerhaft
-laufender Worker/Scheduler, der diese Leases selbstständig abholt und echte
-Connector-Aktionen ausführt.
+M1.0 ist noch **kein dauerhaft laufender Cloud-Scheduler**. Es ist der
+nachgewiesene Dispatch-Kern, auf den die späteren Connector-Executoren gesetzt
+werden.
 
-## Echter Neon-Nachweis
+Eine bekannte Grenze bleibt absichtlich offen: Vor breitem Worker-Rollout muss
+die Lease-Suche auf die vom jeweiligen Worker unterstützten Aktionstypen
+begrenzt werden und es braucht Retry-/Fehler-/Dead-Letter-Zustände. Ein Worker
+soll niemals eine für ihn unbekannte Aktion dauerhaft blockieren.
 
-Der finale M0.9-Nachweis lief nur auf dem kurzlebigen Neon-Zweig
-`control-plane-nachweis-1787421239780` (`br-tiny-hall-b1h962ll`). Der Zweig wurde
-anschließend gelöscht.
+## Erster GitHub-Executor
 
-Nachgewiesen wurden:
+`worker/github-executor.ts` kann:
 
-- zwei Nutzer speichern und lesen nur ihre eigenen Aufträge,
-- `byb_worker` ist `NOLOGIN`/`NOBYPASSRLS`,
-- `byb_worker` kann bestehende Protokolle nicht lesen,
-- aktive Leases werden nicht doppelt vergeben,
-- eine abgelaufene Lease wird mit neuem Token wieder aufgenommen,
-- der alte Worker-Token kann danach nicht mehr abschließen,
-- Lease-Erneuerung, Freigabe, Abschluss und tatsächliche Credits bleiben
-  persistent.
+- das ausgewählte `owner/repo` prüfen,
+- den Standardbranch und dessen SHA auflösen,
+- einen isolierten Arbeitsbranch unter `byb/...` anlegen,
+- ausschließlich einen `byb/...`-Branch automatisch wieder löschen.
 
-Die Lease-Ablaufprüfung verwendet bewusst mehrere Sekunden statt eines
-Millisekunden-Rennens, damit Netzwerklatenz zwischen GitHub Runner und Neon den
-Nachweis nicht zufällig beeinflusst.
+Der Executor schreibt ausdrücklich **nicht direkt auf `main`**.
 
-## Verifikation auf M0.9-Code-Head `54cab274`
+Der automatische PR-Nachweis ist zunächst read-only. Das verhindert, dass ein
+allgemeiner CI-Token versehentlich Repository-Schreibrechte für Tests bekommt.
+Ein echter Branch-Write-Test folgt mit einem expliziten Connector-Credential und
+einem isolierten Testbranch.
+
+## Echter GitHub-Live-Nachweis
+
+Der GitHub-Connector-Workflow hat auf dem echten Repository erfolgreich gelesen:
+
+- Repository: `clarityosbaerbelwesterop-gif/Build-your-Buissness`
+- Standardbranch: `main`
+- Basis-Commit zum Nachweiszeitpunkt: `197fc981`
+
+Der Workflow hat **keine Schreibaktion** ausgeführt.
+
+`BYB_GITHUB_LIVE_TOKEN` ist aktuell nicht als Repo-Secret gesetzt. Deshalb hat
+der read-only Nachweis den kurzlebigen `GITHUB_TOKEN` von GitHub Actions benutzt.
+Für echte Connector-Writes und externe Provider werden explizite
+Provider-Credentials/OAuth-Verbindungen verwendet; keine Schlüssel werden in
+Repo oder Logs geschrieben.
+
+## Verifikation auf M1.0-Head `9b7beff5`
 
 - CI: grün
 - Lint: grün
 - TypeScript: grün
-- Vitest: **20 Dateien / 237 Tests grün**
-- davon Control-Plane-/Persistenz-Subset: **4 Dateien / 22 Tests grün**
+- Vitest: **23 Dateien / 251 Tests grün**
+- Connector-Hub-/Worker-Lauf: **4 Dateien / 16 Tests grün**
 - `npm audit --audit-level=high`: **0 bekannte Schwachstellen**
 - Geheimnisse: grün
 - Sprache: grün
-- RLS-Nachweis: grün
 - Backend-Nachweis: grün
-- Control-Plane-Nachweis gegen echten kurzlebigen Neon-Zweig: grün
+- Control-Plane-Nachweis: grün
+- GitHub-Connector-Nachweis inkl. echtem read-only API-Aufruf: grün
 
-Eine frühere CI-Runde in PR #11 war nur wegen drei Lint-Funden rot
-(`require-await` in zwei Test-Doubles und ein Type-only-Import). Diese Stellen
-wurden korrigiert; der aktuelle Code-Head ist grün.
+Eine erste CI-Runde in PR #12 fand ausschließlich einen strikten TypeScript-
+Fehler im Testaufbau eines optionalen Werbeblocks. Der Test wurde korrigiert;
+der aktuelle Head ist vollständig grün.
 
 ## Neon `production`
 
-M0.9 hat **keine Produktionsänderung** ausgeführt.
+M1.0 hat **keine Produktionsänderung** ausgeführt.
 
-Bekannter Stand vor M0.9:
+Migration 002 und 003 wurden weiterhin nicht auf Neon `production` angewendet.
+Vor einer späteren Freigabe wird der Produktionszustand erneut read-only geprüft
+und die Migrationsreihenfolge 002 → 003 bewusst freigegeben.
 
-- Neon Auth ist auf `production` bereits provisioniert.
-- Migration `002_protokoll_inhalt.sql` war noch nicht angewendet.
-- `byb_app` war dort noch nicht vorhanden.
+## Festgelegte Produktreihenfolge
 
-Migration `003_control_plane.sql` wurde ebenfalls nicht auf `production`
-ausgeführt. Da 003 absichtlich die Rolle `byb_app` voraussetzt, muss bei einer
-späteren produktiven Freigabe zuerst der Zustand erneut read-only geprüft und
-dann 002 vor 003 angewendet werden. Das bleibt ein eigener produktiver Schritt.
+Die weitere Umsetzung soll bewusst in dieser Reihenfolge erfolgen:
 
-## Offen
+1. Connector Hub und Resource Picker belastbar machen.
+2. GitHub-Executor mit isoliertem Live-Write testen.
+3. Neon/Supabase-Executor anbinden.
+4. Vercel-Executor anbinden.
+5. Stripe vollständig anbinden und das Abo-/Credit-/Top-up-System aufbauen.
+6. Wix für die Landingpage anbinden; Landingpage anschließend in den
+   kontrollierten BYB/Vercel-Codepfad übernehmen.
+7. Higgsfield und Veröffentlichungsziele Meta Ads, TikTok Ads, YouTube und
+   Google Ads anbinden.
+8. Google Search Console erst nach dem finalen Pre-Live-Test für Indexierung
+   verwenden.
+9. Vor Live: vollständiger Debug-/Security-/Produkt-/Payment-Test.
+10. Nach dem Livegang, aber **vor Indexierung**, noch einmal den vollständigen
+    realen Live-Pfad mit freigegebenen Live-Credentials testen.
+11. Erst danach Indexierung und schrittweiser Growth-/Ads-Betrieb.
 
-### 1. Worker-Runtime + erster echter Executor
+Live-Credentials für Nachweise werden als GitHub Secrets bzw. über den späteren
+OAuth/Connector-Secret-Store bereitgestellt. Sie werden nie in Dateien,
+Commits, Testfixtures oder Klartext-Logs geschrieben.
 
-Die Queue kann Arbeit persistent koordinieren, aber noch kein dauerhaft
-laufender BYB-Worker führt Aktionen aus. Der nächste Produktkern ist deshalb
-ein Worker, der eine Lease nimmt, sie während langer Arbeit erneuert, genau
-eine Aktion ausführt und Ergebnis/Fehler zurückschreibt.
+## Noch offen
 
-Der erste Executor soll an der Kernkette beginnen:
+### 1. Connector-OAuth/MCP-Flows
 
-**GitHub → Backend (Neon/Supabase) → Vercel.**
+Der gemeinsame Datenvertrag steht, aber die tatsächlichen OAuth-Flows,
+Callback-Grenzen, Token-Rotation und Resource-Discovery-Adapter der einzelnen
+Anbieter sind noch nicht implementiert.
 
-### 2. Fehlergrenzen des autonomen Workers
+### 2. Persistenz der Connector-Auswahl
 
-Für produktiven Dauerbetrieb fehlen noch begrenzte Retries, Klassifikation von
-wiederholbaren/nicht wiederholbaren Fehlern und ein sichtbarer Dead-Letter-
-Zustand statt endloser Wiederaufnahme.
+Verbindungen und ausgewählte Ressourcen müssen RLS-geschützt persistiert und an
+ein BYB-Projekt gebunden werden. Secret-Material bleibt davon getrennt.
 
-### 3. Credits/Billing
+### 3. Worker-Fehlergrenzen
 
-Auftragsdeckel und tatsächlicher Verbrauch sind im Vertrag und persistenten
-Zustand vorhanden. Ein echtes Abo-/Wallet-/Top-up-System sowie atomare
-Reservierung/Abbuchung gegen parallele Worker fehlen noch.
+Unterstützte Aktionstypen müssen vor dem Leasen gefiltert werden. Zusätzlich
+fehlen begrenzte Retries, Fehlerklassifikation und Dead-Letter-Zustände.
 
-### 4. Sandbox-Laufzeit
+### 4. Credits/Billing
 
-Weiter offen. Dynamische Debug-/Security-Angriffe gegen eine isoliert laufende
-Kunden-App brauchen weiterhin eine Runtime-Entscheidung.
+Auftragsdeckel und tatsächliche Credits existieren. Vor Live fehlen noch Abo,
+Wallet, Top-ups, atomare Credit-Reservierung und Stripe-Abrechnung.
 
-### 5. Historische Zugangsdaten und CI-Wartung
+### 5. Sandbox-Laufzeit
+
+Dynamische Debug-/Security-Angriffe gegen eine isoliert laufende Kunden-App
+brauchen weiterhin eine Runtime-Entscheidung.
+
+### 6. Historische Zugangsdaten und CI-Wartung
 
 Frühere NVIDIA-Werte liegen weiterhin im Git-Verlauf; ihr Anbieter-Widerruf ist
-nicht verifiziert. Zusätzlich bestehen nur Wartungswarnungen für
-`actions/checkout@v4`, `actions/setup-node@v4`, ESLint 9.39.5 und eine angekündigte
-Änderung der `pg`-SSL-Modus-Semantik. Aktuell ist davon kein Gate rot.
+nicht verifiziert. Außerdem bestehen Wartungswarnungen für Actions/ESLint und
+die angekündigte `pg`-SSL-Semantikänderung; aktuell ist davon kein Gate rot.
 
-## Nächster Schritt nach Merge von PR #11
+## Nächster Schritt nach Merge von PR #12
 
-**M1.0: Worker-Runtime + erster GitHub-Executor.**
+**M1.1: Connector-Persistenz + erster isolierter GitHub-Write-Proof.**
 
-Ein Cloud-Worker soll eine persistierte Aktion leasen, einen GitHub-Arbeitsbranch
-für ein ausgewähltes Repo bearbeiten, Lease-Erneuerung und Fehlergrenzen nutzen
-und sein Ergebnis wieder in Auftrag/Activity-Log schreiben. Noch keine
-Production-Deployments. Danach wird derselbe Executor-Rahmen um Backend
-(Neon/Supabase) und Vercel erweitert.
+Ziel: Connector-Verbindungen und Resource Picks RLS-geschützt an ein Projekt
+binden, Worker-Leases nach unterstützten Aktionstypen filtern und anschließend
+mit einem expliziten GitHub-Connector-Credential einen temporären `byb/...`-
+Branch anlegen, verifizieren und wieder löschen. Danach folgen Neon/Supabase und
+Vercel auf demselben Adapter-Vertrag.

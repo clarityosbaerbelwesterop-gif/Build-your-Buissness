@@ -1,0 +1,35 @@
+name: GitHub-Connector-Nachweis
+
+on:
+  pull_request:
+    paths:
+      - "connector-hub/**"
+      - "worker/**"
+      - "package.json"
+      - "tsconfig.json"
+      - ".github/workflows/github-connector.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nachweis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Connector-Hub und Worker testen
+        run: npx vitest run connector-hub worker
+
+      - name: GitHub live read-only prüfen
+        run: npm run github:live
+        env:
+          BYB_GITHUB_LIVE_TOKEN: ${{ secrets.BYB_GITHUB_LIVE_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
