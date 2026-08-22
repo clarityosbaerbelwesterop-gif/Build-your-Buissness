@@ -16,7 +16,8 @@
     "migrieren:trocken": "tsx db/migrieren.ts --trocken",
     "pruefen": "npm run lint && npm run typecheck && npm run test",
     "rls": "tsx db/rls-nachweis.ts",
-    "backend:nachweis": "tsx db/protokoll-nachweis.ts"
+    "backend:nachweis": "tsx db/protokoll-nachweis.ts",
+    "controlplane:nachweis": "tsx db/control-plane-nachweis.ts"
   },
   "dependencies": {
     "@types/pg": "^8.23.1",
