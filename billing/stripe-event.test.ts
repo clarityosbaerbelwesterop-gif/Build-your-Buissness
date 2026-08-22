@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import { BYB_PLAENE } from "./katalog.js";
 import { stripeEventNormalisieren } from "./stripe-event.js";
 
-const starter = BYB_PLAENE[0];
+function starterPlan() {
+  const plan = BYB_PLAENE.find((eintrag) => eintrag.key === "starter");
+  if (plan === undefined) throw new Error("Starter-Plan fehlt im BYB-Katalog.");
+  return plan;
+}
 
 function event(type: string, object: unknown, id = "evt_byb_1"): unknown {
   return { id, type, data: { object } };
@@ -45,7 +49,7 @@ describe("Stripe Event-Normalisierung", () => {
       id: "in_byb",
       customer: "cus_byb",
       subscription: "sub_byb",
-      lines: { data: [{ price: { id: starter.stripePriceId } }] },
+      lines: { data: [{ price: { id: starterPlan().stripePriceId } }] },
     }))).toMatchObject({ art: "abo_monat_gutschreiben", customerId: "cus_byb" });
   });
 
