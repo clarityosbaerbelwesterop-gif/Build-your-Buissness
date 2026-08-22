@@ -125,15 +125,15 @@ describe("Connector Hub v1", () => {
 
   it("weist doppelte Werbeziele zurück", () => {
     const basis = auswahl();
+    const werbung = basis.werbung;
+    if (werbung === undefined) throw new Error("Testaufbau enthält keine Werbung.");
+
     expect(() =>
       werkzeugeAufloesen(verbindungen, {
         ...basis,
         werbung: {
-          ...basis.werbung,
-          ziele: [
-            basis.werbung!.ziele[0]!,
-            basis.werbung!.ziele[0]!,
-          ],
+          kreativ: werbung.kreativ,
+          ziele: [werbung.ziele[0]!, werbung.ziele[0]!],
         },
       }),
     ).toThrow(/doppelt/);
