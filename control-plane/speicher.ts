@@ -3,12 +3,12 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import {
-  Aktion,
   Auftrag,
   aktionAbschliessen,
   aktionStarten,
   freigabeErteilen,
   naechsteAktionen,
+  type Aktion,
   type Auftrag as AuftragTyp,
   type Ereignis,
 } from "./v1.js";
