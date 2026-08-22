@@ -31,11 +31,19 @@ jobs:
           # Die Kontextdateien nennen die verbotenen Woerter, um sie zu
           # verbieten. Ein Waechter, der die Regel selbst anschlaegt, ist
           # nutzlos — deshalb sind sie ausgenommen.
+          #
+          # Negative Regressionstests muessen die verbotenen Woerter selbst
+          # nennen duerfen. Ausgenommen werden deshalb nur zwei eng erkennbare
+          # Testzeilen: der Testtitel „behauptet nie ..." und eine
+          # `not.toMatch(...)`-Assertion. Test-Kommentare und jeder andere Code
+          # bleiben weiter im Waechter.
           TREFFER=$(grep -rniE "$MUSTER" \
             --include='*.ts' --include='*.tsx' --include='*.md' \
             --exclude-dir=node_modules --exclude-dir=.git \
             --exclude=CLAUDE.md --exclude=CHATHUB.md --exclude=USER.md \
-            --exclude=DESIGN-UI.md . || true)
+            --exclude=DESIGN-UI.md . \
+            | grep -vE '\.test\.[jt]sx?:[0-9]+:.*(behauptet nie|not\.toMatch)' \
+            || true)
 
           if [ -n "$TREFFER" ]; then
             echo "Verbotene Zusage gefunden (CLAUDE.md §2.2):"

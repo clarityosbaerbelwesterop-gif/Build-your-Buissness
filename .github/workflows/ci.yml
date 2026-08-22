@@ -19,6 +19,14 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+
+      # Pentest.md verlangt den Dependency-Check bei jedem Push/PR. Hohe und
+      # kritische bekannte Schwachstellen blockieren den Schritt; moderate
+      # bleiben sichtbar, ohne jede Entwicklung bei einer Dev-Dependency zu
+      # stoppen.
+      - name: Abhängigkeiten prüfen
+        run: npm audit --audit-level=high
+
       # Welche Zugaenge liegen in den Secrets? Gibt nur Wahrheitswerte aus,
       # nie einen Wert — das Protokoll eines Laufs ist fuer jeden lesbar, der
       # Zugriff auf das Repository hat.

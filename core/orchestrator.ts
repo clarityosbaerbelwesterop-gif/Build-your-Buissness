@@ -2,27 +2,7 @@
  * Die Angriffs-und-Fix-Schleife.
  *
  * Eine Runde ist: alle Angreifer laufen lassen → Fixer auf die offenen Befunde
- * → nächste Runde prüft **alles noch einmal**, nicht nur das Neue.
- *
- * Warum alles noch einmal
- * -----------------------
- * Ein Fix kann einen früheren Fix zerstören. Wer in Runde 2 nur die neuen
- * Befunde prüft, sieht das nicht — der alte Fund gilt weiter als behoben, und
- * das Protokoll behauptet etwas, das nicht mehr stimmt. Genau dafür gibt es
- * den Zustand `wieder_aufgetreten`.
- *
- * Warum ein Fix keinen Erfolg bedeutet
- * ------------------------------------
- * Ein Fixer meldet einen **Versuch**. Ob der Fund weg ist, entscheidet allein
- * die erneute Prüfung. Deshalb wird ein Befund nach dem Fix auf `fix_versucht`
- * gesetzt und erst dann auf `behoben`, wenn ihn in der nächsten Runde kein
- * Angreifer mehr findet.
- *
- * Der Abbruchgrund steht im Protokoll
- * -----------------------------------
- * „Fertig" und „Rundenlimit erreicht" bedeuten für einen Nutzer völlig
- * verschiedene Dinge. Ein Protokoll ohne Abbruchgrund lässt beides gleich
- * aussehen — und das wäre die bequeme Lesart, nicht die wahre.
+ * → geänderte Dateien übernehmen → nächste Runde prüft **alles noch einmal**.
  */
 
 import type {
@@ -35,6 +15,7 @@ import type {
 import { PROTOKOLL_VERSION, endzustandAus, istOffen } from "../protocol/v1.js";
 import type {
   Angreifer,
+  Datei,
   Fixer,
   Kostenzaehler,
   RoherBefund,
@@ -43,11 +24,8 @@ import type {
 import { Zeitzaehler } from "./schnittstellen.js";
 
 export interface Grenzen {
-  /** Wie viele Runden höchstens. Standard 3. */
   readonly maxRunden: number;
-  /** Kostendeckel in Tokens (ein und aus zusammen). 0 heißt: kein Deckel. */
   readonly maxTokens: number;
-  /** Kostendeckel in Millisekunden Laufzeit. 0 heißt: kein Deckel. */
   readonly maxLaufzeitMs: number;
 }
 
@@ -63,27 +41,32 @@ export interface LaufOptionen {
   readonly fixer: Fixer;
   readonly grenzen?: Partial<Grenzen>;
   readonly kostenzaehler?: Kostenzaehler;
-  /** Für Tests: feste Zeit statt `Date.now()`. */
   readonly jetzt?: () => number;
 }
 
-/** Ein Befund ohne die Felder, die der Orchestrator vergibt. */
 interface Fundstelle {
   readonly klasse: string;
   readonly kategorie: Befund["kategorie"];
   readonly roh: RoherBefund;
 }
 
-/**
- * Zwei Funde sind derselbe, wenn Klasse und Nachweis übereinstimmen.
- *
- * Der Nachweis gehört dazu: „secret-im-quelltext" in zwei verschiedenen Dateien
- * sind zwei Funde, nicht einer. Der Klartext gehört **nicht** dazu — er darf
- * sich zwischen Läufen im Wortlaut unterscheiden, ohne dass daraus ein neuer
- * Fund wird.
- */
 function kennung(klasse: string, nachweis: string): string {
   return `${klasse}::${nachweis}`;
+}
+
+/**
+ * Fix-Dateien in das aktuelle Ziel übernehmen.
+ *
+ * Der Fixer schreibt nicht ins Dateisystem. Er liefert eine neue Fassung der
+ * betroffenen Dateien. Erst hier wird daraus der Zustand, den die nächste
+ * Prüfrunde sieht. Ohne diesen Schritt würde Runde 2 immer wieder den alten
+ * Quelltext angreifen und jeder echte Fix als „wieder aufgetreten" erscheinen.
+ */
+function dateienAnwenden(ziel: Ziel, geaendert: readonly Datei[]): Ziel {
+  if (geaendert.length === 0) return ziel;
+  const karte = new Map(ziel.dateien.map((datei) => [datei.pfad, datei]));
+  for (const datei of geaendert) karte.set(datei.pfad, datei);
+  return { ...ziel, dateien: [...karte.values()] };
 }
 
 export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll> {
@@ -97,6 +80,7 @@ export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll>
   const gelaufeneKlassen = new Set<string>();
   let laufendeNummer = 0;
   let abbruchgrund: Abbruchgrund = "rundenlimit";
+  let aktuellesZiel: Ziel = { ...optionen.ziel, dateien: [...optionen.ziel.dateien] };
 
   const gesamt: Kosten = { tokens_ein: 0, tokens_aus: 0, laufzeit_ms: 0 };
 
@@ -104,18 +88,12 @@ export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll>
     zaehler.beginnen();
     const klassenDieserRunde: string[] = [];
 
-    // --- 1. Alle Angreifer laufen lassen ---------------------------------- #
     const gefunden: Fundstelle[] = [];
     for (const angreifer of optionen.angreifer) {
-      // Ein Angreifer, der eine laufende App braucht, wird ohne Sandbox
-      // uebersprungen — und taucht dann NICHT in den gelaufenen Klassen auf.
-      // Sonst stuende im Protokoll „geprueft auf X", wo nichts geprueft wurde.
-      if (angreifer.brauchtLaufzeit && optionen.ziel.laufzeit === undefined) {
-        continue;
-      }
+      if (angreifer.brauchtLaufzeit && aktuellesZiel.laufzeit === undefined) continue;
       klassenDieserRunde.push(angreifer.klasse);
       gelaufeneKlassen.add(angreifer.klasse);
-      const rohe = await angreifer.angreifen(optionen.ziel, {
+      const rohe = await angreifer.angreifen(aktuellesZiel, {
         runde,
         bisherige: [...befunde.values()],
       });
@@ -124,7 +102,6 @@ export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll>
       }
     }
 
-    // --- 2. Befunde einordnen --------------------------------------------- #
     const jetztGefunden = new Set<string>();
     for (const stelle of gefunden) {
       const schluessel = kennung(stelle.klasse, stelle.roh.nachweis);
@@ -144,8 +121,6 @@ export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll>
         });
         continue;
       }
-      // Wieder da. Ob das ein zerstoerter Fix ist oder ein Fix, der nie
-      // gegriffen hat, unterscheidet der Zustand von vorher.
       befunde.set(schluessel, {
         ...vorher,
         zustand:
@@ -155,8 +130,6 @@ export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll>
       });
     }
 
-    // Was in dieser Runde nicht mehr gefunden wurde und vorher angefasst war,
-    // gilt jetzt als behoben — die erneute Pruefung ist der einzige Beleg.
     for (const [schluessel, befund] of befunde) {
       if (jetztGefunden.has(schluessel)) continue;
       if (befund.zustand === "fix_versucht" || befund.zustand === "wieder_aufgetreten") {
@@ -164,20 +137,12 @@ export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll>
       }
     }
 
-    // --- 3. Fixer auf alles Offene ---------------------------------------- #
     for (const [schluessel, befund] of befunde) {
       if (!istOffen(befund)) continue;
-      const versuch = await optionen.fixer.fixen(befund, optionen.ziel);
+      const versuch = await optionen.fixer.fixen(befund, aktuellesZiel);
+      if (versuch.geaendert) aktuellesZiel = dateienAnwenden(aktuellesZiel, versuch.dateien);
       befunde.set(schluessel, {
         ...befund,
-        // `wieder_aufgetreten` ueberlebt den Fixer. Sonst ueberschriebe der
-        // Versuch in derselben Runde genau die Information, wegen der es den
-        // Zustand gibt: dass ein Fix einen frueheren Fix zerstoert hat. Der
-        // Fix wird trotzdem versucht; verschwindet der Fund danach, wird er
-        // wie jeder andere auf `behoben` gesetzt.
-        //
-        // Ohne Aenderung bleibt der Fund offen: ein Fixer, der nicht weiss
-        // wie, darf den Zustand nicht verbessern.
         zustand:
           befund.zustand === "wieder_aufgetreten"
             ? "wieder_aufgetreten"
@@ -200,7 +165,6 @@ export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll>
       kosten,
     });
 
-    // --- 4. Abbruch pruefen ------------------------------------------------ #
     const offeneDa = [...befunde.values()].some(istOffen);
     if (!offeneDa) {
       abbruchgrund = "keine_offenen_befunde";
@@ -213,11 +177,7 @@ export async function schleifeLaufen(optionen: LaufOptionen): Promise<Protokoll>
     abbruchgrund = "rundenlimit";
   }
 
-  // Ein Lauf ohne Runde ist kein Erfolg: maxRunden 0 heisst, es wurde nichts
-  // geprueft. Das darf nicht als „keine offenen Befunde" durchgehen.
-  if (laufendeNummer === 0) {
-    abbruchgrund = "rundenlimit";
-  }
+  if (laufendeNummer === 0) abbruchgrund = "rundenlimit";
 
   const alle = [...befunde.values()];
   return {

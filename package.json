@@ -14,7 +14,8 @@
     "rauchtest": "tsx models/rauchtest.ts",
     "migrieren": "tsx db/migrieren.ts",
     "migrieren:trocken": "tsx db/migrieren.ts --trocken",
-    "pruefen": "npm run lint && npm run typecheck && npm run test"
+    "pruefen": "npm run lint && npm run typecheck && npm run test",
+    "rls": "tsx db/rls-nachweis.ts"
   },
   "dependencies": {
     "@types/pg": "^8.23.1",
@@ -28,6 +29,6 @@
     "tsx": "^4.23.12",
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.2.0",
-    "vitest": "^2.0.5"
+    "vitest": "4.1.10"
   }
 }

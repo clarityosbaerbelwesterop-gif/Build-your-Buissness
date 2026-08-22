@@ -1,0 +1,52 @@
+name: RLS-Nachweis
+
+# Der Nachweis, dass Row Level Security **im Betrieb** greift — nicht nur, dass
+# die Migration fehlerfrei durchlaeuft.
+#
+# Warum ein eigener Lauf und nicht Teil von `npm test`:
+#
+# * Er braucht Zugangsdaten und Netz. `npm test` muss in jedem frischen Klon
+#   laufen, sonst ist es kein Test, sondern eine Bedingung.
+# * Er legt einen Neon-Zweig an und wieder ab. Das dauert Sekunden, aber es
+#   passiert an einem echten Konto — das gehoert nicht in jeden Push.
+#
+# Gegen **welche** Datenbank: gegen einen frischen Zweig, der im selben Lauf
+# entsteht und am Ende wieder verschwindet. Nie gegen den Vorgabezweig, nie
+# gegen etwas mit echten Daten (CLAUDE.md §2.3). Das Aufraeumen steht im
+# `finally` des Skripts, nicht in einem Workflow-Schritt: ein Schritt kommt bei
+# einem harten Abbruch nicht mehr dran, ein `finally` schon.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    # Nur wenn sich am Schema, an der Pruefung oder an diesem Lauf etwas
+    # aendert. Bei jedem PR einen Zweig anzulegen waere Aufwand ohne Anlass.
+    paths:
+      - "db/**"
+      - ".github/workflows/rls.yml"
+
+jobs:
+  nachweis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # Erst die Pruefung selbst pruefen. Sie hat eigene Tests mit einer
+      # Attrappe, in der jede Trennung einzeln abgeschaltet werden kann — eine
+      # Sicherheitspruefung, die nichts findet, sieht sonst genauso aus wie
+      # eine, die nicht funktioniert.
+      - name: Prüflogik testen
+        run: npx vitest run db/rls-pruefung
+
+      - name: Nachweis gegen frischen Zweig
+        run: npm run rls
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_DATABASE: ${{ secrets.NEON_DATABASE }}
+          NEON_ROLE: ${{ secrets.NEON_ROLE }}
