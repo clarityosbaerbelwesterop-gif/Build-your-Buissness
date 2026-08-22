@@ -5,12 +5,15 @@ on:
     branches: [m07-neon-auth-jwt]
     paths:
       - ".github/workflows/m07-jose-refresh.yml"
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
   refresh:
+    if: github.event_name == 'push' || github.head_ref == 'm07-neon-auth-jwt'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
