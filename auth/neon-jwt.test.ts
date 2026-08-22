@@ -14,11 +14,12 @@ import {
   type NeonJwtKonfiguration,
 } from "./neon-jwt.js";
 
-const BASIS = "https://auth.example.test/neondb/auth";
+const ORIGIN = "https://auth.example.test";
+const BASIS = `${ORIGIN}/neondb/auth`;
 const KONFIGURATION: NeonJwtKonfiguration = {
   jwksUrl: `${BASIS}/.well-known/jwks.json`,
-  issuer: BASIS,
-  audience: BASIS,
+  issuer: ORIGIN,
+  audience: ORIGIN,
 };
 const KID = "m07-test-key";
 
@@ -55,8 +56,8 @@ async function tokenBauen(
   const jetzt = Math.floor(Date.now() / 1000);
   let token = new SignJWT({ zweck: "m07-test" })
     .setProtectedHeader({ alg: "EdDSA", kid: KID, typ: "JWT" })
-    .setIssuer(optionen.issuer ?? BASIS)
-    .setAudience(optionen.audience ?? BASIS)
+    .setIssuer(optionen.issuer ?? ORIGIN)
+    .setAudience(optionen.audience ?? ORIGIN)
     .setIssuedAt(jetzt)
     .setExpirationTime(optionen.exp ?? jetzt + 300);
 
@@ -80,7 +81,7 @@ describe("Neon-JWT-Verifikation", () => {
 
   it("lehnt einen falschen Issuer ab", async () => {
     const { pruefer, privat } = await pruefumgebung();
-    const token = await tokenBauen(privat, { issuer: "https://fremd.example.test/auth" });
+    const token = await tokenBauen(privat, { issuer: "https://fremd.example.test" });
     await expect(pruefer(token)).rejects.toBeInstanceOf(AuthTokenFehler);
   });
 
@@ -114,7 +115,7 @@ describe("Neon-JWT-Verifikation", () => {
     expect(() => bearerTokenAus("Bearer eins zwei")).toThrow(AuthTokenFehler);
   });
 
-  it("nimmt Issuer und Audience standardmäßig aus der Auth-Basis-URL", () => {
+  it("nimmt Issuer und Audience standardmäßig aus dem Auth-Endpoint-Origin", () => {
     const config = neonJwtKonfigurationAusUmgebung({
       NEON_AUTH_BASE_URL: BASIS,
       NEON_AUTH_JWKS_URL: `${BASIS}/.well-known/jwks.json`,
