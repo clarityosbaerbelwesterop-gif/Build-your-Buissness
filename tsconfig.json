@@ -23,6 +23,8 @@
     "models",
     "db",
     "auth",
-    "control-plane"
+    "control-plane",
+    "connector-hub",
+    "worker"
   ]
 }
