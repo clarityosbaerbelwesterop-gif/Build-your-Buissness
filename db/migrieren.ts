@@ -16,7 +16,8 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 
 import { zugang } from "../config/zugaenge.js";
-import { ausUmgebung, entschaerfen, projektAusAbsage } from "./entschaerfen.js";
+import { gesetzt, optional } from "../config/umgebung.js";
+import { entschaerfen, projektAusAbsage } from "./entschaerfen.js";
 
 const API = "https://console.neon.tech/api/v2";
 
@@ -127,7 +128,7 @@ async function projekteHolen(schluessel: string): Promise<Projekt[]> {
 }
 
 async function projektWaehlen(schluessel: string): Promise<Projekt> {
-  const gewuenscht = ausUmgebung("NEON_PROJECT_ID");
+  const gewuenscht = gesetzt("NEON_PROJECT_ID");
 
   // Steht die Kennung fest, ist die Liste ueberfluessig — und ein
   // projektgebundener Schluessel darf sie ohnehin nicht abrufen. Die Liste
@@ -171,14 +172,16 @@ console.error(`Projekt: ${projekt.name} (${projekt.id})`);
  * Repo-Zugriff.
  */
 async function verbindung(projektId: string): Promise<string> {
-  const ausSecret = ausUmgebung("DATABASE_URL");
+  const ausSecret = gesetzt("DATABASE_URL");
   if (ausSecret !== undefined) {
     console.error("Verbindung: aus DATABASE_URL.");
     return ausSecret;
   }
 
-  const datenbank = ausUmgebung("NEON_DATABASE") ?? "neondb";
-  const rolle = ausUmgebung("NEON_ROLE") ?? "neondb_owner";
+  // Vorgabe als Argument, nicht hinter einem `??`: so steht sie im Aufruf
+  // und geht nicht in einer Kette unter (config/umgebung.ts).
+  const datenbank = optional("NEON_DATABASE", "neondb");
+  const rolle = optional("NEON_ROLE", "neondb_owner");
   const daten = await neon(
     `/projects/${projektId}/connection_uri`
     + `?database_name=${encodeURIComponent(datenbank)}`
