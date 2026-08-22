@@ -1,0 +1,35 @@
+name: GitHub-Write-Nachweis-Temporär
+
+on:
+  push:
+    branches:
+      - "m11-connector-persistence-write-proof"
+    paths:
+      - "worker/github-executor.ts"
+      - "worker/github-write-nachweis.ts"
+      - ".github/workflows/github-write-proof-temp.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  nachweis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: GitHub-Branch-Grenzen testen
+        run: npx vitest run worker/github-executor.test.ts
+
+      - name: Temporären BYB-Branch live anlegen, prüfen und löschen
+        run: npm run github:write
+        env:
+          BYB_GITHUB_LIVE_TOKEN: ${{ secrets.BYB_GITHUB_LIVE_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
