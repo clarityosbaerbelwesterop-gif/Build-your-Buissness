@@ -1,6 +1,9 @@
 name: Dependency-Refresh
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/dependency-refresh.yml"
   push:
     branches: [m05-fixer-und-nachweise]
     paths:
