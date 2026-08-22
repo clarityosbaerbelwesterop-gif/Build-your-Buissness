@@ -80,6 +80,13 @@ describe("Control-Plane-Speicher", () => {
     expect(aufrufe).toEqual([]);
   });
 
+  it("öffnet bei leerer Executor-Menge gar keine Worker-Transaktion", async () => {
+    const { db, aufrufe } = leereVerbindung();
+
+    await expect(naechsteAktionLeasen(db, "worker", 60_000, 1000, [])).resolves.toBeUndefined();
+    expect(aufrufe).toEqual([]);
+  });
+
   it("sucht Hintergrundarbeit nur innerhalb des begrenzten Worker-Kontexts", async () => {
     const { db, aufrufe } = leereVerbindung();
 
