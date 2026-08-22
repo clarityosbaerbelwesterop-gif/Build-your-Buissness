@@ -65,6 +65,7 @@ export async function checkoutAnlegen(anfrage: CheckoutAnfrage): Promise<Checkou
     body.set("subscription_data[metadata][plan_key]", plan.key);
   } else {
     body.set("mode", "payment");
+    body.set("customer_creation", "always");
     body.set("line_items[0][price]", BYB_TOPUP.stripePriceId);
     body.set("metadata[topup_credits]", String(BYB_TOPUP.credits));
     body.set("payment_intent_data[metadata][application]", "byb");
