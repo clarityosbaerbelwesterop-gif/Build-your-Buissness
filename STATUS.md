@@ -1,9 +1,10 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M0.5 ist gebaut und im PR #7 in Prüfung.**
-194 Tests, Lint und Typprüfung laufen grün. Der RLS-Verhaltenstest gegen einen
-kurzlebigen Neon-Zweig läuft grün. `npm audit` meldet nach dem Dependency-Refresh
-**0 bekannte Schwachstellen**.
+Stand: **M0.6 ist in PR #8 gebaut und nachgewiesen.**
+PR #7 wurde als M0.5 nach `main` gemergt (`234dbe33`). Auf dem M0.6-Code-Head
+`fe6d2426` sind CI, RLS-Nachweis, Geheimnisse, Sprache und Backend-Nachweis grün.
+Die normale CI meldet 14 Testdateien / **201 Tests**, Lint und Typprüfung grün
+sowie `npm audit`: **0 bekannte Schwachstellen**.
 
 ## Was steht
 
@@ -12,46 +13,94 @@ kurzlebigen Neon-Zweig läuft grün. `npm audit` meldet nach dem Dependency-Refr
 | `protocol/v1.ts` | Versionierter Datenvertrag für Befunde, Runden, Protokoll, Kosten und Abbruchgrund. |
 | `core/orchestrator.ts` | Angreifen → fixen → geänderte Dateien übernehmen → alles erneut prüfen. |
 | `attackers/` | Drei statische Klassen: Zugangsdaten, RLS, Auth an Route-Handlern. |
-| `fixers/regeln.ts` | Drei konservative Regel-Fixer. Sie ändern nur Fälle, die ohne Raten ableitbar sind. |
+| `fixers/regeln.ts` | Drei konservative Regel-Fixer; unbekannter Kontext bleibt offen statt geraten zu werden. |
 | `db/001_grundschema.sql` | Vier BYB-Tabellen mit `ENABLE`, `FORCE` und Mandanten-Policy. |
-| `db/rls-pruefung.ts` | Verhaltenstest für Lesen, Ändern, Löschen und Schreiben auf fremde Kennung. |
-| `db/rls-nachweis.ts` | Legt einen Neon-Testzweig und eine NOLOGIN-Testrolle ohne `BYPASSRLS` an, prüft und räumt beides wieder auf. |
-| CI | Lint, Typen, 194 Tests, Dependency-Audit, Zugangsübersicht, Secret-Wächter und Sprach-Wächter. |
+| `db/002_protokoll_inhalt.sql` | M0.6-Migration für kanonisches Protokoll-JSON und die eingeschränkte Laufzeitrolle `byb_app`. |
+| `db/auth-kontext.ts` | Übernimmt nur eine bereits verifizierte Nutzerkennung und setzt sie transaktional in den DB-Kontext. |
+| `db/protokoll-speicher.ts` | Speichert ein validiertes `Protokoll v1` atomar und liest die kanonische Fassung wieder über den v1-Vertrag. |
+| `db/protokoll-nachweis.ts` | Prüft Schreiben, verlustfreies Lesen und Mandantentrennung auf einem kurzlebigen Neon-Zweig. |
+| CI | Lint, Typen, 201 Tests, Dependency-Audit, Zugangsübersicht, Secret-Wächter, Sprach-Wächter, RLS- und Backend-Nachweis. |
 
-## Was M0.5 konkret geändert hat
+## M0.6 — Backend-Persistenz und Auth-Brücke
 
-- Der Orchestrator prüft nach einem Fix jetzt wirklich den **geänderten**
-  Quelltext. Vorher lieferte der Fixer Dateien zurück, die nächste Runde sah
-  trotzdem die alte Fassung.
-- Zugangsdaten-Muster leben an einer Stelle. Produkt-Angreifer und GitHub-CI
-  benutzen dieselbe Erkennungslogik.
-- Die Fixer können bekannte deterministische Fälle bearbeiten:
-  - eigenständiges Secret-Stringliteral → Laufzeitvariable,
-  - fehlendes RLS/FORCE bzw. eine eindeutig ableitbare `nutzer_id`-Policy,
-  - fehlende Auth-Prüfung nur dann, wenn im Projekt bereits ein passender
-    `requireAuth()`-Helper existiert.
-- Fehlt der nötige Kontext, bleibt der Befund offen. Es wird keine Auth- oder
-  Mandantenlogik erfunden.
+Das bisherige relationale Schema konnte ein vollständiges `Protokoll v1` nicht
+verlustfrei rekonstruieren: insbesondere die Befund-Snapshots je Runde sind im
+Datenvertrag enthalten, aber nicht als vollständige historische Fassung in den
+relationalen Tabellen abgelegt.
 
-## Neon — verifizierter Stand
+M0.6 verwendet deshalb zwei Darstellungen aus **derselben validierten Eingabe**:
 
-Projekt: `damp-dream-67070160` (`Build your Buissness`), PostgreSQL 18,
+- `protokolle.inhalt` hält das vollständige versionierte Protokoll als
+  kanonische JSONB-Fassung.
+- `laeufe`, `protokolle`, `runden` und `befunde` bleiben die relationale
+  Projektion für Suche und spätere Auswertungen.
+- Lesen erfolgt aus der kanonischen Fassung und durchläuft danach erneut
+  `protocol/v1.ts`; fehlerhafte gespeicherte Daten werden nicht stillschweigend
+  als gültiges Protokoll ausgegeben.
+- Schreiben von Lauf, Protokoll, Runden und Befunden geschieht in einer
+  Transaktion.
+
+### Auth-/DB-Kontext
+
+`db/auth-kontext.ts` prüft **keine JWT-Signatur**. Das ist Absicht: diese Grenze
+nimmt eine Identität erst nach externer Token-Verifikation an und übernimmt nur
+deren `sub`-Kennung.
+
+Für jeden Nutzerdatenzugriff:
+
+1. beginnt eine DB-Transaktion,
+2. wechselt die Verbindung auf `byb_app`,
+3. setzt `request.jwt.claims` mit der verifizierten `sub`-Kennung lokal für
+   diese Transaktion,
+4. lässt die bestehenden RLS-Policies lesen/schreiben filtern,
+5. beendet oder verwirft die Transaktion.
+
+`byb_app` ist NOLOGIN, nicht SUPERUSER und hat kein `BYPASSRLS`.
+
+## Nachweise am 22.08.2026
+
+### GitHub PR #8 — Code-Head `fe6d2426`
+
+- CI: grün.
+- Lint: grün.
+- TypeScript: grün.
+- Vitest: 14 Dateien, **201 Tests grün**.
+- `npm audit --audit-level=high`: **0 vulnerabilities**.
+- Geheimnisse: grün.
+- Sprache: grün.
+- RLS-Nachweis: grün.
+- Backend-Nachweis: grün.
+
+Der Backend-Nachweis erzeugt einen kurzlebigen Neon-Zweig, wendet dort M0.6 an,
+speichert für zwei verschiedene Nutzer je ein Protokoll, liest beide
+verlustfrei zurück, bestätigt die gegenseitige Nicht-Sichtbarkeit und löscht
+den Zweig anschließend wieder.
+
+Zusätzlich wurde über den Neon-Connector auf dem separaten Testzweig
+`br-wild-bird-b1ve7uom` die Rollen-/RLS-Kette direkt gegengeprüft:
+
+- `byb_app`: `rolcanlogin=false`, `rolbypassrls=false`, `rolsuper=false`.
+- mit Nutzer A war das Testprotokoll sichtbar: 1 Zeile.
+- nach Wechsel auf Nutzer B war dasselbe Testprotokoll nicht sichtbar: 0 Zeilen.
+- die Testdaten wurden per Rollback verworfen.
+
+## Produktion — unverändert
+
+Neon-Projekt: `damp-dream-67070160` (`Build your Buissness`), PostgreSQL 18,
 Default-Branch `production` (`br-patient-snow-b11ksdc8`).
 
-Am 22.08.2026 direkt über den Neon-Connector geprüft:
+M0.6 hat **keine** Produktionsmigration und **keine** Auth-Provisionierung
+ausgeführt:
 
-- `laeufe`, `protokolle`, `befunde`, `runden` existieren.
-- Auf allen vier Tabellen ist RLS aktiviert und erzwungen.
-- Jede Tabelle hat ihre `*_eigene`-Policy.
-- Jede Policy prüft `nutzer_id = auth.nutzer_kennung()` sowohl für vorhandene
-  Zeilen als auch für neue/änderte Zeilen.
-- Der PR-Nachweis erzeugt einen eigenen Neon-Zweig, prüft dort die
-  Mandantentrennung und löscht den Zweig danach wieder.
+- `002_protokoll_inhalt.sql` ist noch nicht auf `production` angewendet.
+- Neon Auth ist noch nicht auf `production` provisioniert.
+- Ein vorhandenes altes Protokoll würde Migration 002 bewusst blockieren,
+  statt aus unvollständigen Altspalten ein v1-Protokoll zu erfinden. Der
+  Produktionsstand war beim letzten direkten Check in diesem Schritt leer;
+  vor einem späteren Anwenden wird das erneut geprüft.
 
-**Noch nicht eingerichtet:** ein produktiver Auth-/API-Pfad, der echte
-Nutzer-JWTs in `request.jwt.claims` überführt und Protokolle über das Backend
-schreibt/liest. Deshalb wird Neon Auth nicht vorab auf Produktion provisioniert;
-der Codepfad dafür kommt zuerst in einen eigenen, getesteten Schritt.
+Der GitHub-Workflow `Neon` bleibt manuell und verlangt sowohl die konkrete
+handgeschriebene Migrationsdatei als auch die Eingabe `anwenden`.
 
 ## Zugangsdaten und historischer Vorfall
 
@@ -66,10 +115,9 @@ Am 21.08.2026 lagen echte NVIDIA-Schlüssel in drei Commits auf `main`:
 - `da2d9ca`
 
 Die heute verwendeten `NV_API_KEY_1/2/3` sind andere Werte. Die alten Werte
-stehen aber weiterhin im Git-Verlauf. **Ob die alten Werte beim Anbieter
-widerrufen wurden, ist nicht verifiziert.** Ein normales Löschen im aktuellen
-Baum entfernt sie nicht aus der Historie; eine History-Rewrite-Aktion wäre ein
-eigener destruktiver Schritt und wird nicht in PR #7 versteckt.
+stehen weiterhin im Git-Verlauf. **Ob sie beim Anbieter widerrufen wurden, ist
+nicht verifiziert.** Eine History-Rewrite-Aktion bleibt ein separater,
+destruktiver Schritt.
 
 Aktuell durch CI als gesetzt nachgewiesen:
 
@@ -78,7 +126,7 @@ Aktuell durch CI als gesetzt nachgewiesen:
 - `NV_API_KEY_3`
 - `NEON_API_KEY`
 
-Nicht gesetzt und derzeit nicht für M0.5 nötig:
+Nicht gesetzt und für den aktuellen PR nicht erforderlich:
 
 - `NVIDIA_BASE_URL` — der Code hat eine Vorgabe.
 - `DATABASE_URL` — die Neon-Anbindung kann die Verbindung über die Neon-API
@@ -86,48 +134,36 @@ Nicht gesetzt und derzeit nicht für M0.5 nötig:
 
 Keine Secret-Werte werden in CI ausgegeben.
 
-## Dependencies
-
-Vitest wurde auf `4.1.10` aktualisiert und das Lockfile unter Node 22 erneut
-installiert. Danach: Lint grün, Typprüfung grün, 194 Tests grün und
-`npm audit`: **0 vulnerabilities**.
-
-Die normale CI enthält jetzt dauerhaft `npm audit --audit-level=high`; neue
-hohe oder kritische bekannte Dependency-Funde blockieren den PR.
-
 ## Offene Produktfragen
 
-### 1. Sandbox-Laufzeit — blockiert M1
+### 1. Echte Auth-Verifikation
+
+M0.6 beginnt **nach** der Token-Verifikation. Noch fehlt der Provider-Adapter,
+der ein reales Nutzer-JWT kryptografisch prüft und erst danach die `sub`-Kennung
+an `auth-kontext.ts` übergibt. Neon Auth ist dafür der nächste vorgesehene
+Integrationsschritt; produktive Provisionierung erfolgt erst als eigener,
+ausdrücklich freigegebener Zustandsschritt.
+
+### 2. Sandbox-Laufzeit — blockiert M1
 
 Noch offen. Kandidaten aus `CLAUDE.md`: Fly Machines, E2B, Modal, Render
-Background Worker. Entscheidend sind Kosten je Lauf, Startzeit und kontrollierbarer
-ausgehender Netzwerkzugriff. Bis zur Entscheidung bleiben Angriffe statisch.
+Background Worker. Bis zur Entscheidung bleiben Angriffe statisch.
 
-### 2. Laufzeit-Fixer
+### 3. Laufzeit-Fixer und Grenzen der statischen Prüfung
 
-M0.5 deckt nur deterministische statische Funde ab. Funde, die erst in einer
-laufenden Sandbox sichtbar werden, brauchen später einen eigenen Fixer-Pfad.
+Noch nicht abgedeckt sind unter anderem fachlich falsche vorhandene Auth-Prüfungen,
+Policies mit falscher Mandantenspalte, Rechteausweitung über mehrere Routen und
+Datenabfluss, der erst in einer laufenden Anwendung sichtbar wird. Diese Grenzen
+müssen im späteren Prüfprotokoll sichtbar bleiben.
 
-### 3. Grenzen der statischen Prüfung
+## Nächster Schritt nach PR #8
 
-Noch nicht abgedeckt sind unter anderem:
+**M0.7: Auth-Provider/JWT-Verifikation auf einem isolierten Zweig.**
 
-- vorhandene, aber fachlich falsche Auth-Prüfungen,
-- Policies mit der falschen Mandantenspalte,
-- Rechteausweitung über mehrere Routen,
-- Laufzeit-Fehlerseiten und Datenabfluss über die Anwendung.
+Ziel: ein reales Provider-Token validieren, daraus ausschließlich nach gültiger
+Prüfung die `sub`-Kennung ableiten und den bereits nachgewiesenen M0.6-Pfad damit
+aufrufen. Erst danach folgen — jeweils als eigener freigegebener Schritt —
+Migration 002 auf `production` und produktive Auth-Provisionierung.
 
-Diese Grenzen müssen im späteren Prüfprotokoll sichtbar bleiben.
-
-## Nächster Schritt nach PR #7
-
-**M0.6 Backend-Persistenz und Auth-Brücke zuerst.**
-
-Ziel: einen kleinen, getesteten Backend-Pfad bauen, der ein gültiges
-`Protokoll v1` in Neon schreibt und mandantengebunden wieder liest. Dazu kommt
-die Auth-Brücke, die eine echte Nutzerkennung in den Datenbank-Kontext setzt.
-Erst wenn dieser Pfad in einem isolierten Neon-Zweig nachgewiesen ist, wird eine
-produktive Auth-Integration provisioniert.
-
-Danach kann die Protokoll-Oberfläche aus `CHATHUB.md` gegen echte Daten statt
-gegen ein Beispielobjekt gebaut werden.
+Die Protokoll-Oberfläche aus `CHATHUB.md` kann anschließend gegen den echten
+Backend-Lesepfad statt gegen ein Beispielobjekt gebaut werden.

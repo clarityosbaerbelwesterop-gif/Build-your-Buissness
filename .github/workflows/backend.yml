@@ -1,0 +1,37 @@
+name: Backend-Nachweis
+
+# M0.6 beweist den echten Schreib-/Lesepfad gegen einen kurzlebigen Neon-Zweig.
+# Produktion wird dabei nicht verändert. Das Skript legt den Zweig an, wendet
+# die M0.6-Migration dort an, schreibt zwei Mandanten und löscht den Zweig im
+# finally wieder.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "db/**"
+      - "protocol/**"
+      - "package.json"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  nachweis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Persistenzlogik testen
+        run: npx vitest run db/auth-kontext.test.ts db/protokoll-speicher.test.ts
+
+      - name: Schreib-/Lesepfad gegen frischen Neon-Zweig
+        run: npm run backend:nachweis
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_DATABASE: ${{ secrets.NEON_DATABASE }}
+          NEON_ROLE: ${{ secrets.NEON_ROLE }}
