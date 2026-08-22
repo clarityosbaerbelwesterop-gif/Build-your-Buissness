@@ -25,6 +25,8 @@
     "auth",
     "control-plane",
     "connector-hub",
-    "worker"
+    "worker",
+    "billing",
+    "api"
   ]
 }
