@@ -17,6 +17,7 @@ permissions:
 env:
   VERCEL_ORG_ID: team_5KyyWAPW9vLU4EiaKaYZuhaG
   VERCEL_PROJECT_ID: prj_VB7ToSJE6spWofEKZRjVyC0d6rOL
+  VERCEL_PROJECT_NAME: build-your-buissness
   BYB_PUBLIC_ORIGIN: https://build-your-buissness.vercel.app
   EXPECTED_NEON_PROJECT_ID: damp-dream-67070160
 
@@ -129,9 +130,6 @@ jobs:
           NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL }}
         run: |
           set -euo pipefail
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-
           sync_secret() {
             name="$1"
             value="$2"
@@ -140,11 +138,15 @@ jobs:
               return 0
             fi
             echo "::add-mask::$value"
-            for target in preview production; do
-              npx --yes vercel@latest env rm "$name" "$target" --yes --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
-              printf '%s' "$value" | npx --yes vercel@latest env add "$name" "$target" --sensitive --token "$VERCEL_TOKEN" >/dev/null
-              echo "$name: $target synchronisiert"
-            done
+            payload="$(jq -n --arg key "$name" --arg value "$value" \
+              '{key:$key,value:$value,type:"sensitive",target:["preview","production"],comment:"BYB Runtime Sync"}')"
+            curl --fail --silent --show-error --output /dev/null \
+              --request POST \
+              --url "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?upsert=true&teamId=$VERCEL_ORG_ID" \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$payload"
+            echo "$name: preview+production synchronisiert"
           }
           sync_secret DATABASE_URL "$DATABASE_URL"
           sync_secret STRIPE_SECRET_KEY "$STRIPE_SECRET_KEY"
@@ -156,20 +158,51 @@ jobs:
           sync_secret NV_API_KEY_3 "$NV_API_KEY_3"
           sync_secret NVIDIA_BASE_URL "$NVIDIA_BASE_URL"
 
-      - name: Vercel Preview deployen und Runtime prüfen
+      - name: Vercel Preview aus Git-Head deployen
         if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          SOURCE_REF: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
-          url="$(npx --yes vercel@latest deploy --yes --token "$VERCEL_TOKEN")"
-          echo "Preview: $url"
-          echo "### BYB Vercel Preview" >> "$GITHUB_STEP_SUMMARY"
-          echo "$url" >> "$GITHUB_STEP_SUMMARY"
-
-          billing="$(npx --yes vercel@latest curl /api/billing --deployment "$url" --token "$VERCEL_TOKEN" 2>/dev/null || true)"
-          if ! printf '%s' "$billing" | grep -q 'NICHT_AUTORISIERT'; then
-            echo "Billing-Route lieferte nicht den erwarteten schnellen Auth-Fehler."
+          payload="$(jq -n \
+            --arg name "$VERCEL_PROJECT_NAME" \
+            --arg project "$VERCEL_PROJECT_NAME" \
+            --arg org "clarityosbaerbelwesterop-gif" \
+            --arg repo "Build-your-Buissness" \
+            --arg ref "$SOURCE_REF" \
+            --arg sha "$SOURCE_SHA" \
+            '{name:$name,project:$project,gitSource:{type:"github",org:$org,repo:$repo,ref:$ref,sha:$sha}}')"
+          deploy_json="$(curl --fail --silent --show-error \
+            --request POST \
+            --url "https://api.vercel.com/v13/deployments?teamId=$VERCEL_ORG_ID" \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "$payload")"
+          deployment_id="$(printf '%s' "$deploy_json" | jq -r '.id // empty')"
+          if [ -z "$deployment_id" ]; then
+            echo "Vercel lieferte keine Deployment-ID."
             exit 1
           fi
-          echo "Billing-Route antwortet kontrolliert; Runtime-Handler ist erreichbar."
+
+          for _ in $(seq 1 30); do
+            status_json="$(curl --fail --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$deployment_id?teamId=$VERCEL_ORG_ID")"
+            ready_state="$(printf '%s' "$status_json" | jq -r '.readyState // empty')"
+            deployment_url="$(printf '%s' "$status_json" | jq -r '.url // empty')"
+            if [ "$ready_state" = "READY" ]; then
+              echo "Preview READY: https://$deployment_url"
+              echo "### BYB Vercel Preview" >> "$GITHUB_STEP_SUMMARY"
+              echo "https://$deployment_url" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ "$ready_state" = "ERROR" ] || [ "$ready_state" = "CANCELED" ]; then
+              echo "Vercel Preview endete mit $ready_state."
+              exit 1
+            fi
+            sleep 4
+          done
+          echo "Vercel Preview wurde nicht innerhalb des Prüfzeitfensters READY."
+          exit 1
