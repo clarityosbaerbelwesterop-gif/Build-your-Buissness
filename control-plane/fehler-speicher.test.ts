@@ -40,7 +40,7 @@ function dbFuerVersuch(versuche: number) {
     protokoll,
     db: {
       query(sql: string, werte?: readonly unknown[]) {
-        protokoll.push({ sql, werte });
+        protokoll.push(werte === undefined ? { sql } : { sql, werte });
         if (sql.includes("select a.nutzer_id, a.inhalt, x.versuche")) {
           return Promise.resolve({
             rows: [{ nutzer_id: auftrag.nutzer_id, inhalt: auftrag, versuche }],
