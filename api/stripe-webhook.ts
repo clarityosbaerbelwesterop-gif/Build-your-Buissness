@@ -12,9 +12,7 @@ function json(daten: unknown, status = 200): Response {
   return Response.json(daten, { status, headers: { "cache-control": "no-store" } });
 }
 
-export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== "POST") return json({ fehler: "METHOD_NOT_ALLOWED" }, 405);
-
+export async function POST(request: Request): Promise<Response> {
   const payload = await request.text();
   try {
     const eventId = stripeEventIdAusPayload(payload);
@@ -25,10 +23,6 @@ export default async function handler(request: Request): Promise<Response> {
       stripeWebhookSignaturPruefen(payload, signatur, webhookSecret);
     }
 
-    // Verarbeitet wird nie blind der Request-Body. Der Server lädt das Event mit
-    // dem Stripe-Secret erneut und verarbeitet ausschließlich diese kanonische
-    // Live-Antwort. Der Signaturcheck bleibt Defense-in-Depth, sobald sein Secret
-    // in der Runtime gesetzt ist.
     const kanonisch = await stripeEventKanonischAbrufen(eventId, zugang("stripeSecretKey"));
     const befehl = stripeEventNormalisieren(kanonisch);
     const klient = new Client({

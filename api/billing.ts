@@ -8,9 +8,7 @@ function json(daten: unknown, status = 200): Response {
   return Response.json(daten, { status, headers: { "cache-control": "no-store" } });
 }
 
-export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== "GET") return json({ fehler: "METHOD_NOT_ALLOWED" }, 405);
-
+export async function GET(request: Request): Promise<Response> {
   try {
     const token = bearerTokenAus(request.headers.get("authorization") ?? undefined);
     const identitaet = await neonJwtPruefer(neonJwtKonfigurationAusUmgebung())(token);
