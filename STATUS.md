@@ -1,19 +1,16 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M1.1 ist in PR #13 gebaut und nachgewiesen.**
+Stand: **M1.2 ist auf `main`; M1.3 ist in PR #15 gebaut und der Live-Runtime-Sync wurde real nachgewiesen.**
 
-- M0.5 / PR #7 ist in `main` (`234dbe33`).
-- M0.6 / PR #8 ist in `main` (`8776c66d`).
-- M0.7 / PR #9 ist in `main` (`c5a7336a`).
-- M0.8 / PR #10 ist in `main` (`95015e15`).
-- M0.9 / PR #11 ist in `main` (`197fc981`).
-- M1.0 / PR #12 ist in `main` (`72b25de1`).
-- M1.1 liegt auf `m11-connector-persistence-write-proof`; PR #13 ist noch nicht gemergt.
-- Auf dem sauberen M1.1-Code-Head `ddd121ca` sind CI, Geheimnisse, Sprache,
-  RLS-Nachweis, Backend-Nachweis, Control-Plane-Nachweis,
-  GitHub-Connector-Nachweis und Connector-Persistenz-Nachweis grün.
-- CI: **25 Testdateien / 260 Tests**, Lint und TypeScript grün,
-  `npm audit --audit-level=high`: **0 bekannte Schwachstellen**.
+- M0.5 / PR #7: `main` (`234dbe33`)
+- M0.6 / PR #8: `main` (`8776c66d`)
+- M0.7 / PR #9: `main` (`c5a7336a`)
+- M0.8 / PR #10: `main` (`95015e15`)
+- M0.9 / PR #11: `main` (`197fc981`)
+- M1.0 / PR #12: `main` (`72b25de1`)
+- M1.1 / PR #13: `main` (`407a8713`)
+- M1.2 / PR #14: `main` (`8bc733ce`)
+- M1.3: Branch `m13-live-runtime-sync`, PR #15.
 
 ## Produktkern
 
@@ -21,224 +18,197 @@ Stand: **M1.1 ist in PR #13 gebaut und nachgewiesen.**
 
 > **Vom Repo bis zum Deploy bis zum Werbespot — BYB macht alles für dich.**
 
-Der Nutzer verbindet seine Unternehmenssysteme und wählt die konkreten
-Ressourcen, auf denen BYB arbeiten darf. Der interne Auftrag bleibt reine
-Ausführungs- und Wiederaufnahme-Infrastruktur; er ist nicht die primäre
-Nutzeroberfläche.
+Der Nutzer verbindet Unternehmenssysteme und wählt die konkreten Ressourcen,
+auf denen BYB arbeiten darf. Der interne Auftrag ist Ausführungs- und
+Wiederaufnahme-Infrastruktur, nicht die primäre Nutzeroberfläche.
 
-## Connector Hub — Zielbild
+## Auf `main` bereits vorhanden
 
-Aktuell modelliert sind:
+### Control Plane und Worker
 
-- GitHub → Repository
-- Neon oder Supabase → Backend-Projekt
-- Vercel → Projekt
-- Stripe → Payment-Konto
-- Higgsfield → Creative-Workspace
-- Meta Ads → Werbekonto
-- TikTok Ads → Werbekonto
-- YouTube → Kanal
-- Google Ads → Werbekonto
-- Google Search Console → Property
-- Wix → Site
+- persistente Aufträge, Aktionen und Activity Log
+- Approval- und Credit-Grenzen
+- Worker-Leases mit Ablauf, Erneuerung und sicherem Abschluss
+- Worker leasen nur Aktionstypen, für die ein Executor registriert ist
+- isolierter realer GitHub-Branch-Write-Proof wurde erfolgreich ausgeführt
 
-Der Datenvertrag enthält ausschließlich stabile Konto-/Ressourcenreferenzen,
-Status und Scopes. OAuth-Tokens, Refresh-Tokens, API-Keys oder Provider-Secrets
-werden dort nicht gespeichert.
+### Connector Hub
 
-## M1.1 — persistente Connector-Auswahl
+Modelliert sind unter anderem GitHub, Neon/Supabase, Vercel, Stripe,
+Higgsfield, Meta Ads, TikTok Ads, YouTube, Google Ads, Search Console und Wix.
 
-Migration `004_connector_hub.sql` führt zwei neue RLS-geschützte Tabellen ein:
+Persistiert werden ausschließlich Connection-/Resource-Referenzen. OAuth-
+Tokens, Refresh-Tokens, API-Keys und Provider-Secrets gehören nicht in die
+Control Plane.
 
-### `connector_verbindungen`
+Die Tabellen `connector_verbindungen` und `connector_projekt_werkzeuge` sind
+RLS-geschützt. `byb_worker` darf Connector-Picks nur lesen, nicht umschreiben.
 
-Speichert pro Nutzer die validierten Connector-Referenzen und die verfügbaren,
-vom Adapter gemeldeten Ressourcen als kanonisches Connector-Hub-v1-JSON.
+### Neon Production
 
-### `connector_projekt_werkzeuge`
+Projekt: `damp-dream-67070160`, Branch `production`.
 
-Speichert pro Nutzer und Projekt den konkreten Resource Pick, also zum Beispiel:
+Migrationen 002–005 sind produktiv angewendet. Vorhanden sind unter anderem:
 
-- genau dieses GitHub-Repo,
-- genau dieses Neon- oder Supabase-Projekt,
-- genau dieses Vercel-Projekt,
-- später Stripe, Wix, Higgsfield, Ads-Accounts und Search-Property.
+- Control-Plane-Tabellen
+- Connector-Persistenz
+- Billing-Konten und Abos
+- Credit-Konten und Credit-Buchungen
+- idempotente Stripe-Webhook-Ereignisse
+- `byb_app`, `byb_worker`, `byb_billing` mit getrennten Rechten
+- FORCE RLS auf den mandantenbezogenen BYB-Tabellen
+- Managed Neon Auth
 
-`projektWerkzeugeSpeichern()` persistiert einen Pick erst, nachdem
-`werkzeugeAufloesen()` bestätigt hat, dass Anbieter, Verbindung, Status und
-Ressourcen-ID zusammenpassen.
+Neon Auth erlaubt inzwischen die stabile BYB-Systemdomain
+`https://build-your-buissness.vercel.app` als Trusted Origin. Google OAuth ist
+über Neons Shared Provider vorhanden; E-Mail/Passwort-Anmeldung ist aktiviert.
 
-Alle Connector-Tabellen haben `ENABLE ROW LEVEL SECURITY` und
-`FORCE ROW LEVEL SECURITY`.
+### Stripe Billing und Credits
 
-`byb_app` darf nur Daten des verifizierten Nutzers lesen und verändern.
-`byb_worker` erhält auf Connector-Daten **ausschließlich SELECT**. Damit kann ein
-Worker die freigegebenen Ressourcen eines Auftrags auflösen, aber nicht selbst
-Connectoren oder Resource Picks umschreiben.
+Der BYB-Katalog ist strikt von vorhandenen älteren Stripe-Produkten getrennt.
+BYB-Objekte tragen den Namespace `byb_preview_v1` / `application=byb`.
 
-## Worker-Lease-Filter
+Aktuelle Preise:
 
-M1.0 hatte noch eine reale Queue-Grenze: Ein Worker konnte theoretisch eine
-startbare Aktion leasen, obwohl er für deren Typ keinen Executor registriert
-hatte. Dann wäre die Aktion unnötig blockiert gewesen.
+- Starter: 20 EUR/Monat, 100 Credits
+- Pro: 200 EUR/Monat, 750 Credits
+- Scale: 250 EUR/Monat, 1.500 Credits
+- Top-up: 25 EUR einmalig, 100 Credits
 
-M1.1 behebt das vor der Lease:
+Der Backend-Pfad verarbeitet BYB-Checkout-/Invoice-/Subscription-Events und
+schreibt Credits idempotent nach Neon. Fremde Stripe-Produkte werden ignoriert.
 
-- `worker/runtime.ts` übergibt die tatsächlich registrierten Aktionstypen an die
-  Queue.
-- `naechsteAktionLeasen()` berücksichtigt nur diese Typen.
-- Auch abgelaufene Leases werden nur von einem Worker übernommen, der den
-  Aktionstyp ausführen kann.
-- Ein leeres Executor-Register öffnet gar keine Worker-Transaktion.
-- `AktionsLease` enthält zusätzlich `projektId`, damit ein Executor die exakt
-  zum Auftrag gehörenden Connector-Picks laden kann.
+Der produktive BYB-Webhook `we_1U7YtQEmDA2oLCportbRSUaX` zeigt auf:
 
-Retry-/Dead-Letter-Logik ist damit noch nicht gelöst; M1.1 verhindert zunächst
-die falsche Zuteilung.
+`https://build-your-buissness.vercel.app/api/stripe-webhook`
 
-## Echter Connector-Persistenz-Nachweis gegen Neon
+Er empfängt ausschließlich:
 
-Der finale Nachweis auf dem M1.1-Code-Head lief mit dem vorhandenen
-`NEON_API_KEY` gegen einen eigens erzeugten kurzlebigen Neon-Zweig:
+- `checkout.session.completed`
+- `invoice.paid`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
 
-- Zweig: `connector-hub-nachweis-1787424292910`
-- Zweig-ID: `br-morning-glade-b1tpgkrj`
-- Migrationen 002 → 003 → 004 wurden nur dort angewendet.
-- Der Zweig wurde anschließend wieder gelöscht.
+Alte Stripe-Webhooks anderer Projekte wurden nicht verändert.
 
-Nachgewiesen wurde konkret:
+## M1.3 — Live-Runtime und Secret-Sync
 
-1. Die Connector-Tabellen enthalten keine Spalten für Token/Secret/API-Key/
-   Refresh-Token.
-2. Zwei Nutzer können dieselben Connector-IDs und dieselbe Projekt-ID verwenden,
-   ohne gegenseitig ihre Ressourcen zu sehen.
-3. Resource Picks werden gegen die eigenen verbundenen Ressourcen aufgelöst.
-4. `byb_worker` kann die adressierten Picks lesen.
-5. `byb_worker` kann Connector-Konfiguration nicht verändern.
+PR #15 korrigiert die Vercel-API-Routen auf Method-Handler (`GET`/`POST`) und
+enthält einen Regressionstest dafür.
 
-`production` wurde dabei nicht verändert.
+Der dauerhafte Workflow `.github/workflows/vercel-preview.yml` ist
+**workflow_dispatch-only**. Er:
 
-## Echter isolierter GitHub-Write-Proof
+1. prüft die freigegebenen GitHub-Secrets und Ziel-IDs,
+2. leitet `DATABASE_URL` und Neon-Auth Base/JWKS aus dem freigegebenen Neon-
+   Projekt ab,
+3. prüft/ergänzt die BYB-Vercel-Origin in Neon Auth,
+4. synchronisiert nur die benötigten Runtime-Secrets per Vercel REST API in
+   Preview + Production des Projekts `build-your-buissness`,
+5. erzeugt anschließend einen Preview-Deploy aus dem freigegebenen Git-Head.
 
-Der Write-Pfad wurde zusätzlich einmal real gegen dieses Repository ausgeführt.
-Dafür gab es auf dem Feature-Branch vorübergehend einen eng begrenzten
-Push-Workflow mit `contents: write`. Dieser Workflow und sein temporärer
-Erfolgsmarker wurden danach wieder aus dem PR-Diff entfernt.
+`NEON_API_KEY` wird nicht in die Vercel-Web-Runtime kopiert. Der Stripe-
+Repository-Secretname `STRIPE_SIGNATURE_SECRET` wird ausschließlich als
+Runtime-Variable `STRIPE_WEBHOOK_SECRET` gespiegelt.
 
-GitHub-Actions-Run: `32591589595`.
+### Realer Sync-Proof
 
-Nachgewiesen wurde:
+Für genau einen kontrollierten Nachweis gab es vorübergehend einen auf PR #15
+und denselben Repository-Branch begrenzten `pull_request`-Trigger. Er wird vor
+dem Merge nicht im finalen Workflow behalten.
 
-- Branch-Regeltests: **4 Tests grün**.
-- Temporärer Branch wurde erstellt:
-  `byb/live-nachweis-repo-write-32591589595`.
-- Basis war exakt `main` auf `72b25de1`.
-- Der Branch-SHA wurde nach dem Anlegen erneut gelesen und mit der Basis
-  verglichen.
-- Der temporäre Branch wurde anschließend gelöscht.
-- Die Löschung gilt im Proof nur dann als erfolgreich, wenn GitHub beim erneuten
-  Lesen tatsächlich `404` liefert; Auth-/Netzwerkfehler zählen nicht als
-  erfolgreiche Löschung.
+Erster Versuch: sicher vor Vercel-Writes abgebrochen, weil Neon wegen mehrerer
+Rollen eine explizite DB-Rolle verlangte.
 
-`BYB_GITHUB_LIVE_TOKEN` war weiterhin nicht gesetzt. Dieser einmalige isolierte
-Repository-Proof lief daher mit dem kurzlebigen GitHub-Actions-Token. Für echte
-Nutzer-Connectoren bleibt das Ziel eine explizite OAuth-/Provider-Credential-
-Verbindung; es wird kein allgemeiner CI-Token als Produktcredential verwendet.
+Zweiter Versuch: Neon-Konfiguration und Auth-Domain erfolgreich; Vercel-CLI-
+Projektlink scheiterte vor Secret-Writes.
 
-## Verifikation auf M1.1-Code-Head `ddd121ca`
+Finaler Proof auf Commit `6178a665`:
 
 - CI: grün
 - Lint: grün
 - TypeScript: grün
-- Vitest: **25 Dateien / 260 Tests grün**
-- `npm audit --audit-level=high`: **0 bekannte Schwachstellen**
-- Geheimnisse: grün
-- Sprache: grün
-- RLS-Nachweis: grün
-- Backend-Nachweis: grün
-- Control-Plane-Nachweis: grün
-- GitHub-Connector-Nachweis: grün
-- Connector-Persistenz-Nachweis inkl. echtem kurzlebigem Neon-Zweig: grün
-- isolierter GitHub-Write-Proof inkl. Create → Verify → Delete: grün
+- Vitest: **30 Dateien / 278 Tests grün**
+- Secret-Preflight: benötigte GitHub-Secrets gesetzt
+- Neon Runtime-Konfiguration: erfolgreich aufgelöst
+- Neon Auth Trusted Origin: erfolgreich geprüft
+- Vercel Runtime-Secrets: **Preview + Production erfolgreich synchronisiert**
+- Vercel Preview: **READY**
+- Secret-Werte wurden nicht in Repo oder Workflow-Ausgabe geschrieben
 
-Während der Entwicklung waren zwei CI-Runden wegen ausschließlich lokaler
-Lint-Regeln im temporären Write-Proof rot (`no-unsafe-finally` und
-`only-throw-error`). Der Fehlerpfad wurde so umgebaut, dass Ausführungs- und
-Cleanup-Fehler nicht überschrieben werden und unbekannte Fehlerwerte als echte
-`Error`-Objekte mit Ursache weitergegeben werden. Der saubere Endstand ist grün.
+Der finale Workflow ist wieder manuell-only und verwendet für Vercel-Env-Writes
+die projektspezifische REST API statt eines lokalen CLI-Linkzustands.
 
-## Neon `production`
+## Vercel
 
-M1.1 hat **keine Produktionsmigration** ausgeführt.
+Kostenloser Hobby-Plan; keine kostenpflichtigen Zusatzfunktionen wurden von BYB
+aktiviert.
 
-Migration 002, 003 und 004 wurden weiterhin nicht auf Neon `production`
-angewendet. Der manuelle Neon-Workflow kennt jetzt bewusst alle vier
-Migrationsdateien 001–004; Anwenden erfordert weiterhin eine separate manuelle
-Ausführung mit der bestehenden Bestätigungsgrenze.
+Zielprojekt:
 
-## Festgelegte Produktreihenfolge
+- Name: `build-your-buissness`
+- ID: `prj_VB7ToSJE6spWofEKZRjVyC0d6rOL`
+- GitHub: `clarityosbaerbelwesterop-gif/Build-your-Buissness`
+- stabile System-/Vorschaudomain: `https://build-your-buissness.vercel.app`
 
-1. Connector Hub + Resource Picker.
-2. Connector-Persistenz + isolierte Provider-Proofs.
-3. Tatsächliche OAuth/MCP-/Credential-Flows und Resource Discovery.
-4. GitHub produktiv über die gewählte Repo-Ressource ausführen.
-5. Neon/Supabase-Adapter und Executor.
-6. Vercel-Adapter und Executor.
-7. Stripe + Abo-/Credit-/Top-up-System vollständig vor Live.
-8. Wix-Landingpage anbinden und in den kontrollierten BYB/Vercel-Codepfad
-   übernehmen.
-9. Higgsfield + Meta/TikTok/YouTube/Google Ads.
-10. Vollständiger Pre-Live Produkt-/Payment-/Debug-/Security-Test.
-11. Livegang; danach noch einmal echter Live-Pfad-Test **vor Indexierung**.
-12. Erst danach Search Console, Indexierung und schrittweiser Growth-/Ads-Betrieb.
+Die Custom Domain bleibt bis zum finalen Produktabschluss unangetastet.
 
 ## Noch offen
 
-### 1. Echte Provider-Verbindungen
+### 1. Nutzer-Auth vollständig in der Oberfläche
 
-Der Daten- und Persistenzvertrag steht. Noch fehlen die tatsächlichen
-OAuth-Callbacks, MCP-/API-Adapter, Token-Rotation, Credential-Referenzen und die
-Resource-Discovery je Anbieter.
+Neon Auth ist backendseitig vorhanden und die Vercel-Origin ist freigegeben.
+Die Landingpage besitzt aktuell aber noch keinen vollständigen Sign-up/Login-
+Flow, der ein Neon-Auth-JWT in die Browser-Session übernimmt. Checkout verlangt
+bereits ein verifiziertes JWT und bleibt ohne Login absichtlich geschlossen.
 
-### 2. Backend- und Deploy-Executor
+### 2. Echte Nutzer-Connectoren
 
-GitHub-Branch-Schreiben ist als isolierter Proof nachgewiesen. Als nächstes
-müssen Neon/Supabase und Vercel denselben Connector-/Resource-Pick-Vertrag
-verwenden.
+Connection-/Resource-Persistenz steht. Noch fehlen die vollständigen
+OAuth-/Credential-Flows und Resource Discovery für die echten Nutzerkonten,
+insbesondere GitHub, Vercel, Neon/Supabase, Stripe und danach Growth-Provider.
 
-### 3. Dauerhafter Worker-Betrieb
+### 3. Vollständiger Worker-Betrieb
 
 Noch fehlen begrenzte Retries, Fehlerklassifikation, Dead-Letter-Zustand und
-eine dauerhafte Cloud-Worker-Runtime.
+eine dauerhaft laufende Cloud-Worker-Runtime. Der GitHub-Write ist bisher ein
+isolierter Proof, kein vollständiger autonomer Produktbetrieb.
 
-### 4. Credits/Billing
+### 4. Wix-Designquelle
 
-Auftragsdeckel und tatsächlicher Verbrauch existieren. Vor Live fehlen Stripe-
-Abo, Wallet, Top-ups und atomare Credit-Reservierung/Abbuchung.
+Eine eigene BYB-Wix-Site ist noch nicht erzeugt. Wix bleibt gemäß `DESIGN-UI.md`
+Design-/Vergleichswerkzeug; Wix-Code wird nicht als Produktcode übernommen.
+Visuell freigegebene Konzepte werden sauber im BYB/Vercel-Code umgesetzt.
 
-### 5. Sandbox-Laufzeit
+### 5. Pre-Live-End-to-End-Test
 
-Die Runtime für dynamische Debug-/Security-Angriffe gegen eine isolierte
-Kunden-App bleibt eine eigene Architekturentscheidung.
+Vor Custom Domain und Indexierung müssen mindestens diese realen Pfade grün
+sein:
 
-### 6. Wartung / historischer Secret-Vorfall
+- Sign-up/Login → gültiges Neon-JWT
+- Nutzer-RLS und Billing-Read
+- Starter/Pro/Scale Checkout
+- einmaliger Top-up
+- Stripe-Webhook → idempotentes Credit-Ledger
+- Connector wählen → Auftrag → Worker → Ergebnis/Activity Log
+- Vercel Production ohne Runtime-5xx
+- vollständiger Debug-/Security-Test
 
-Frühere NVIDIA-Werte liegen weiterhin im Git-Verlauf; ihr Anbieter-Widerruf ist
-nicht verifiziert. Zusätzlich bestehen Wartungswarnungen für GitHub Actions,
-ESLint und die angekündigte Änderung der `pg`-SSL-Semantik. Aktuell ist davon
-kein Gate rot.
+### 6. Später, bewusst noch nicht
 
-## Nächster Schritt nach Merge von PR #13
+- Custom Domain
+- Search Console / Indexierung
+- Higgsfield-Werbemittel und Ads-Publishing
+- Meta/TikTok/YouTube/Google-Ads-Betrieb
 
-**M1.2: echte Connector-Verbindungen + Resource Discovery für die Kernkette.**
+Diese Schritte kommen erst nach dem vollständigen Live-Test.
 
-Zuerst werden GitHub, Neon/Supabase und Vercel hinter einen gemeinsamen
-Credential-/Adapter-Vertrag gesetzt. OAuth bzw. der passendste
-anbieterunterstützte Verbindungsweg liefert nur eine Secret-Referenz; BYB lädt
-danach die verfügbaren Repositories/Projekte und speichert weiterhin nur die
-vom Nutzer gewählten Referenzen in der Control Plane.
+## Nächste Umsetzung
 
-Danach kann der Worker nicht nur einen Testbranch erzeugen, sondern einen
-persistierten BYB-Auftrag vollständig über die ausgewählten Ressourcen entlang
-**GitHub → Neon/Supabase → Vercel** ausführen — weiterhin ohne Production-Deploy
-ohne explizite Freigabe.
+1. PR #15 sauber abschließen und mergen.
+2. Production-Deployment auf der stabilen `.vercel.app`-Domain prüfen.
+3. Nutzer-Auth-UI mit Neon Auth schließen und Checkout/Billing E2E testen.
+4. Kern-Connectoren als echte Nutzerverbindungen bauen: GitHub → Neon/Supabase → Vercel → Stripe.
+5. Wix-BYB-Design erzeugen und visuell gegen die Vercel-Landingpage prüfen.
+6. Worker-Retry/Failure-Semantik + realen vollständigen Auftragspfad schließen.
+7. Pre-Live-/Security-Test; erst danach Custom Domain, Indexierung und Werbung.
