@@ -1,6 +1,6 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M1.5 ist auf `main` gemergt und der Owner-Live-Test ist auf der stabilen BYB-Systemdomain freigegeben.**
+Stand: **M1.5 ist auf `main`. Der Owner-Live-Test ist nach dem realen UI-Test wieder blockiert; M1.6 baut die fehlende Produktoberfläche.**
 
 - M0.5 / PR #7: `main` (`234dbe33`)
 - M0.6 / PR #8: `main` (`8776c66d`)
@@ -13,6 +13,8 @@ Stand: **M1.5 ist auf `main` gemergt und der Owner-Live-Test ist auf der stabile
 - M1.3 / PR #15: `main` (`c3be3765`)
 - M1.4 / PR #16: `main` (`7fac6491`)
 - M1.5 / PR #17: `main` (`d643cca3`)
+- Post-Merge-Status / PR #18: `main` (`3f3dc071`)
+- M1.6: Branch `m16-product-shell-legal`
 
 ## Produktkern
 
@@ -24,6 +26,70 @@ Der Nutzer verbindet Unternehmenssysteme und wählt die konkreten Ressourcen,
 auf denen BYB arbeiten darf. Der interne Auftrag ist Ausführungs- und
 Wiederaufnahme-Infrastruktur, nicht die primäre Nutzeroberfläche.
 
+## Befund aus dem echten Owner-UI-Test
+
+Der technische M1.5-Pre-Live-Proof war grün, aber der reale Browser-Test hat
+Produktlücken sichtbar gemacht. Deshalb wird der Stand nicht mehr als
+Owner-Live-Test-READY geführt.
+
+Beobachtet:
+
+1. E-Mail/Passwort-Login funktioniert.
+2. Nach Login erschien nur die frühere Billing-/Checkout-Testfläche statt BYB.
+3. Ein Nutzer ohne aktiven Tarif sah `null` als Billing-/Credit-Zustand.
+4. Starter, Pro, Scale und Top-up dominierten die erste eingeloggte Ansicht.
+5. Der Connector Hub war in der eingeloggten Produktoberfläche nicht sichtbar.
+6. Die Landingpage zeigte Beispiel-Auftrags-ID, Zeitstempel und Statusbelege wie
+   reale Aktivität, obwohl es Demo-Inhalt war.
+7. Impressum, Datenschutz, AGB und EULA waren nicht sichtbar verlinkt.
+8. Social Login ist noch nicht produktionsreif eingerichtet.
+
+## M1.6 — Product Shell statt Billing-Testseite
+
+M1.6 korrigiert die Produktoberfläche in einer kohärenten Scheibe:
+
+- `/app.html` wird der eingeloggte BYB-Leitstand.
+- Der Chathub steht wieder im Zentrum.
+- Connectoren werden mit echten persistierten Zuständen aus einer geschützten
+  `/api/connectors`-Leseschnittstelle angezeigt.
+- Noch nicht verbundene Provider werden als nicht verbunden dargestellt; es
+  werden keine ChatGPT-Connectoren als Produktcredentials ausgegeben.
+- Activity Log startet ehrlich leer statt mit Demo-Aufträgen.
+- Credits erscheinen als ruhiger Status im globalen Rahmen.
+- Top-up bleibt aus dem Leitstand heraus und wird erst bei verbrauchtem
+  bestehendem Credit-Konto in `/billing.html` angeboten.
+- Nutzer ohne Tarif sehen eine verständliche Tarif-Auswahl statt `null`.
+- Login leitet nach erfolgreicher Session in den Leitstand statt in Checkout.
+- Öffentliche Landingpage enthält keine erfundenen Auftrag-IDs, Zeitstempel oder
+  Abschlussstempel mehr.
+- Impressum, Datenschutz, AGB und EULA werden auf den zentralen Oberflächen
+  sichtbar verlinkt.
+
+## Auth / Social Login
+
+Managed Neon Auth ist aktiv. Der aktuelle Production-Auth-Stand enthält als
+Social Provider nur den geteilten Google-Provider.
+
+Aktuelle Neon-Dokumentation für Managed Better Auth unterstützt Social Login mit
+Google, GitHub und Vercel. GitHub und Vercel benötigen für Produktion eigene
+OAuth-App-Credentials. Apple wird von Managed Neon Auth derzeit nicht als
+unterstützter Social Provider dokumentiert und wird deshalb nicht als
+funktionierende BYB-Option vorgetäuscht.
+
+Die bestehende BYB-Auth-Grenze proxyt heute E-Mail/Passwort-Sessions. Social OAuth
+wird erst sichtbar freigeschaltet, wenn der unterstützte Flow mit produktiven
+Provider-Credentials und BYB-Session-Verhalten nachgewiesen ist.
+
+## Connector Hub
+
+Persistiert sind Connection- und Resource-Picks für unter anderem GitHub,
+Neon/Supabase, Vercel, Stripe, Wix und spätere Growth-Provider. Tokens,
+Refresh-Tokens und API-Keys werden nicht in der Control Plane gespeichert.
+
+M1.6 macht diese Zustände erstmals in der eingeloggten App sichtbar. Für das
+öffentliche Verbinden fehlen weiterhin BYB-eigene OAuth-/Provider-Apps und die
+vollständige Resource Discovery. Das ist nach M1.6 der nächste Produktblock.
+
 ## Produktionsbasis
 
 ### Neon
@@ -32,176 +98,71 @@ Wiederaufnahme-Infrastruktur, nicht die primäre Nutzeroberfläche.
 - Migrationen 002–005 produktiv angewendet
 - Control Plane, Connector-Persistenz, Billing-/Credit-Ledger vorhanden
 - Rollen `byb_app`, `byb_worker`, `byb_billing` getrennt
-- FORCE RLS auf den sieben geprüften mandantenbezogenen BYB-Tabellen
+- FORCE RLS auf den geprüften mandantenbezogenen BYB-Tabellen
 - Managed Neon Auth aktiv
-- `https://build-your-buissness.vercel.app` als Trusted Origin
-- E-Mail/Passwort aktiv; Google Shared OAuth vorhanden
-
-Der Production-Pre-Live-Proof erzeugte einen kurzlebigen Testnutzer und räumte
-ihn anschließend wieder auf. Danach wurden geprüft:
-
-- `0` verbliebene `byb-prelive-*`-Testnutzer
-- `0` verwaiste Billing-Konten
-- `0` verwaiste Credit-Konten
 
 ### Stripe
 
 Der BYB-Katalog ist vom Altbestand über `application=byb` und
 `namespace=byb_preview_v1` getrennt.
 
-Für den kontrollierten Owner-Live-Test sind alle vier BYB-Produkte im
-vorhandenen Live-Stripe-Konto aktiv. Die im Repo hinterlegten Price-IDs wurden
-gegen Stripe gelesen und stimmen bei Betrag, Typ, Intervall, Credits,
-Lookup-Key und Produktzuordnung:
-
 - Starter: 20 EUR/Monat, 100 Credits
 - Pro: 200 EUR/Monat, 750 Credits
 - Scale: 250 EUR/Monat, 1.500 Credits
 - Top-up: 25 EUR einmalig, 100 Credits
 
-Produktiver BYB-Webhook:
-`https://build-your-buissness.vercel.app/api/stripe-webhook`
-
-Der reale Production-Proof erzeugte für einen kurzlebigen Testnutzer alle vier
-Checkout-Sessions erfolgreich. Stripe bestätigte danach die Sessions als
-`open` und `unpaid`; es wurde keine Zahlung bestätigt.
+Die vier Price-IDs und Checkout-Erzeugung wurden im M1.5-Pre-Live-Proof geprüft.
+Eine Zahlung wurde dabei nicht bestätigt.
 
 ### Vercel
 
 - Projekt `build-your-buissness`
-- ID `prj_VB7ToSJE6spWofEKZRjVyC0d6rOL`
 - stabile Systemdomain `https://build-your-buissness.vercel.app`
-- Production-Deploy `dpl_GSmHMsf5UcHSoBESTKqUgEjxhaM4` aus M1.5-Commit `d643cca3` ist READY
-- `/login.html` liefert nach dem M1.5-Merge HTTP 200
-- `/api/billing` liefert ohne JWT kontrolliert HTTP 401
-- `/api/stripe-webhook` weist GET kontrolliert mit HTTP 405 ab
-- auf dem neuen M1.5-Production-Deploy wurden im abschließenden Prüfzeitraum keine 5xx gefunden
+- M1.5-Production-Deploy war READY
+- Custom Domain bleibt bis nach dem erneuten erfolgreichen Owner-Live-Test
+  unangetastet
 
-Frühere Timeout-Cluster gehörten zu einem älteren Deployment und wurden nicht
-dem aktuellen Production-Deploy zugerechnet.
+## Rechtliche Oberfläche
 
-Custom Domain bleibt bis nach dem Owner-Live-Test unangetastet.
+M1.6 enthält erste sichtbare Fassungen für:
 
-## M1.4 — First-Party Auth und Billing-Testoberfläche
+- Impressum
+- Datenschutzhinweise
+- AGB
+- EULA / Nutzungsbedingungen
 
-PR #16 ist gemergt.
+Verwendete Anbieterangaben:
 
-`/api/auth` ist eine Same-Origin-Grenze vor Managed Neon Auth und erlaubt nur
-Registrierung, Anmeldung, Sitzung, JWT und Abmeldung. Fremde Browser-Origins
-werden abgelehnt; Session-Cookies bleiben first-party auf der BYB-Domain.
+Bärbel Westerop / ClarityCompassAi  
+Drinhausstraße 22  
+47447 Moers (Kapellen)  
+clarityos.baerbelwesterop@gmail.com
 
-`/login.html` bietet:
+Nicht bekannte Register-, Steuer-, Aufsichts- oder Unternehmensform-Angaben
+werden nicht erfunden. Vor öffentlichem Launch bleiben eine rechtliche Prüfung
+und der Abgleich mit den dann tatsächlich aktiven Providern, Datenflüssen,
+Bestell- und Kündigungsprozessen offen.
 
-- Registrieren / Anmelden / Abmelden
-- kurzlebiges JWT erneuern
-- RLS-geschützten Billing-Stand lesen
-- Starter-/Pro-/Scale-Checkout öffnen
-- Top-up-Checkout öffnen
+## Definition für den nächsten Owner-Live-Test
 
-### Echter Production-Proof
+Vor einer Freigabe müssen mindestens erfüllt sein:
 
-Der erfolgreiche GitHub-Actions-Proof gegen die stabile BYB-Systemdomain hat
-nachgewiesen:
+1. Login führt in den BYB-Leitstand.
+2. Kein Demo-Auftrag wird als reale Aktivität dargestellt.
+3. Connector Hub ist sichtbar und zeigt echte Zustände.
+4. Billing ist Nebenfunktion; `null` wird nie roh angezeigt.
+5. Top-up erscheint nur bei aufgebrauchtem bestehendem Credit-Konto.
+6. Rechtliche Links sind auf Landing, Login, App und Abrechnung erreichbar.
+7. Finale CI-/Secret-/Sprach-/Runtime-Gates sind grün.
+8. Vercel-Preview der M1.6-Fassung ist geprüft.
 
-1. Registrierung eines zufälligen Kurzzeitnutzers
-2. gültige Session und JWT-Ausgabe
-3. RLS-geschützter `/api/billing`-Read mit HTTP 200
-4. Starter-Checkout erzeugt
-5. Pro-Checkout erzeugt
-6. Scale-Checkout erzeugt
-7. Top-up-Checkout erzeugt
-8. keine Zahlung bestätigt
-9. Testnutzer im Cleanup aus Neon Auth entfernt
+## Danach vor Custom Domain
 
-Der Proof-Workflow bleibt ausschließlich manuell ausführbar, damit normale
-PR-Synchronisationen keine weiteren Live-Checkout-Sessions erzeugen.
+1. Unterstützten Social Login produktionsreif schließen, mindestens GitHub.
+2. BYB-eigene Provider-OAuth-Apps + Resource Discovery für den Connector Hub.
+3. Chathub mit der persistenten Control Plane und dem Cloud-Worker verbinden.
+4. Erneuter Owner-Live-Test des vollständigen Kernflusses.
+5. Rechtstexte final juristisch prüfen und an produktive Datenflüsse angleichen.
 
-## M1.5 — begrenzte Worker-Retries und Dead Letter
-
-PR #17 ist als `d643cca3` nach `main` gemergt.
-
-- Executor-Fehler werden abgefangen und über `entschaerfen()` für das Activity
-  Log gekürzt und von bekannten Secret-Mustern bereinigt.
-- Standardgrenze: drei Versuche.
-- Vor Erreichen der Grenze wird die laufende Aktion atomar auf `geplant`
-  zurückgesetzt, das Lease entfernt und die Wiederholung protokolliert.
-- Beim ausgeschöpften Versuch werden Aktion und Auftrag terminal auf
-  `fehlgeschlagen` gesetzt.
-- Der terminale Zustand ist das Dead Letter des Auftrags und bleibt mit
-  Versuchszahl und Fehlerbeleg sichtbar.
-- Fehlerübergang, Lease-Freigabe und Activity Log laufen in derselben
-  `byb_worker`-Transaktion.
-
-### Echter Neon-Nachweis
-
-`db/worker-fehler-nachweis.ts` läuft im bestehenden Control-Plane-Gate gegen
-einen frischen kurzlebigen Neon-Zweig und prüft persistent:
-
-- Fehlversuch 1 → wieder eingeplant
-- Fehlversuch 2 → wieder eingeplant
-- Fehlversuch 3 → terminal `fehlgeschlagen`
-- Projektion enthält `versuche = 3`
-- Lease-Token, Lease-Ablauf und Lease-Owner sind danach geräumt
-- Activity Log enthält zwei Retry-Ereignisse und ein terminales Fehlerereignis
-- der Testzweig wird anschließend gelöscht
-
-Der finale PR-Head bestand CI, Secret-, Sprach-, RLS-, Backend-, Connector-
-Persistenz-, Control-Plane- und GitHub-Connector-Nachweis. Der reale Retry-
-Nachweis und der bestehende Lease-/RLS-/Mandantenproof waren grün.
-
-## Connector Hub
-
-Persistiert sind Connection- und Resource-Picks, unter anderem für GitHub,
-Neon/Supabase, Vercel, Stripe, Wix und spätere Growth-Provider. Tokens,
-Refresh-Tokens und API-Keys werden nicht in der Control Plane gespeichert.
-
-Der isolierte echte GitHub-Branch-Write-Proof ist vorhanden. Die in ChatGPT
-verbundenen GitHub-/Vercel-/Neon-/Stripe-/Wix-Konten dienen nur der aktuellen
-Owner-/Entwicklungsarbeit und werden nicht als exportierbare BYB-
-Produktcredentials ausgegeben.
-
-Für öffentliches Nutzer-Onboarding fehlen weiterhin BYB-eigene Provider-OAuth-
-Apps/Credentials und die vollständige Resource Discovery für die jeweiligen
-Provider. Das blockiert nicht den aktuellen Owner-Live-Test der bereits
-verbundenen Produktionsbasis, ist aber vor einem öffentlichen Launch zu
-schließen.
-
-## Wix
-
-Wix bleibt gemäß `DESIGN-UI.md` ausschließlich internes Design-/Vergleichswerkzeug
-und ist keine Production-Abhängigkeit. Im verbundenen Wix-Konto existiert keine
-BYB-Site; vorhandene fremde/andere Sites wurden deshalb nicht verändert.
-
-Der frühere direkte Import einer normalen Vercel-Seiten-URL war kein gültiger
-Wix-Design-Bundle-Import. Für den Owner-Live-Test ist kein Wix-Write erforderlich.
-
-## Owner-Live-Test: READY
-
-Der Owner-Live-Test ist auf
-`https://build-your-buissness.vercel.app/login.html` freigegeben.
-
-Zu testen ist die sichtbare Kette:
-
-1. Registrierung / Login
-2. Session / Logout / erneuter Login
-3. Billing-Stand
-4. Starter-, Pro-, Scale- und Top-up-Checkout bis zur Stripe-Zahlseite
-5. keine echte Zahlung, außer sie wird bewusst als separater Finanztest ausgelöst
-
-## Bewusst danach
-
-Nach bestandenem Owner-Live-Test:
-
-1. Custom Domain
-2. Search Console / Indexierung
-3. Werbespots und Creatives für **BYB selbst**
-4. anschließend Meta/TikTok/YouTube/Google-Ads-Betrieb für BYB
-
-Vor einem öffentlichen Nutzerlaunch zusätzlich:
-
-- BYB-eigene OAuth-/Provider-App-Credentials und Resource Discovery
-- dauerhafter Cloud-Worker mit diesen Produktcredentials
-- echte isolierte Sandbox-Laufzeit für dynamische Debug-/Security-Angriffe
-
-Bis eine isolierte Sandbox existiert, werden dynamische Angriffstests nicht als
-durchgeführt ausgewiesen.
+Erst nach diesem Kernfluss folgen Custom Domain, Search Console / Indexierung,
+Werbespots und anschließend Ads für BYB selbst.
