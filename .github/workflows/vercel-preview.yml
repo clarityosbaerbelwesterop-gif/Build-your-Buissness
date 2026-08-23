@@ -7,9 +7,7 @@ on:
         description: 'Zum Secret-Sync + Preview-Deploy "deploy" eintippen.'
         required: true
         default: "trocken"
-  push:
-    branches:
-      - m13-live-runtime-sync
+  pull_request:
     paths:
       - .github/workflows/vercel-preview.yml
 
@@ -24,6 +22,11 @@ env:
 
 jobs:
   runtime-sync:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.head_ref == 'm13-live-runtime-sync' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +67,7 @@ jobs:
           fi
 
       - name: Neon Runtime-Konfiguration ableiten
-        if: github.event_name == 'push' || inputs.deploy == 'deploy'
+        if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
@@ -93,7 +96,7 @@ jobs:
           echo "Neon Runtime-Konfiguration aufgelöst."
 
       - name: Vercel-Domain in Neon Auth freigeben
-        if: github.event_name == 'push' || inputs.deploy == 'deploy'
+        if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
@@ -115,7 +118,7 @@ jobs:
         run: echo 'Kein Vercel-Write. Für Sync + Preview-Deploy mit "deploy" starten.'
 
       - name: Runtime-Secrets nach Vercel synchronisieren
-        if: github.event_name == 'push' || inputs.deploy == 'deploy'
+        if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
@@ -126,6 +129,9 @@ jobs:
           NVIDIA_BASE_URL: ${{ secrets.NVIDIA_BASE_URL }}
         run: |
           set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
           sync_secret() {
             name="$1"
             value="$2"
@@ -150,8 +156,8 @@ jobs:
           sync_secret NV_API_KEY_3 "$NV_API_KEY_3"
           sync_secret NVIDIA_BASE_URL "$NVIDIA_BASE_URL"
 
-      - name: Vercel Preview deployen
-        if: github.event_name == 'push' || inputs.deploy == 'deploy'
+      - name: Vercel Preview deployen und Runtime prüfen
+        if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
@@ -160,3 +166,10 @@ jobs:
           echo "Preview: $url"
           echo "### BYB Vercel Preview" >> "$GITHUB_STEP_SUMMARY"
           echo "$url" >> "$GITHUB_STEP_SUMMARY"
+
+          billing="$(npx --yes vercel@latest curl /api/billing --deployment "$url" --token "$VERCEL_TOKEN" 2>/dev/null || true)"
+          if ! printf '%s' "$billing" | grep -q 'NICHT_AUTORISIERT'; then
+            echo "Billing-Route lieferte nicht den erwarteten schnellen Auth-Fehler."
+            exit 1
+          fi
+          echo "Billing-Route antwortet kontrolliert; Runtime-Handler ist erreichbar."
