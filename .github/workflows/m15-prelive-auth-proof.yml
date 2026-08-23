@@ -1,11 +1,10 @@
 name: M1.5 Pre-Live Auth-Proof Einmalig
 
 on:
-  push:
-    branches:
-      - m15-worker-retry-deadletter
+  pull_request:
     paths:
       - .github/workflows/m15-prelive-auth-proof.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
