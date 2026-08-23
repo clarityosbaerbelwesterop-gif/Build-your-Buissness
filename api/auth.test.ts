@@ -12,6 +12,11 @@ function anfrage(
   return new Request(`${ORIGIN}${pfad}`, init);
 }
 
+function urlText(url: string | URL | Request): string {
+  if (typeof url === "string") return url;
+  return url instanceof URL ? url.href : url.url;
+}
+
 describe("BYB Auth-Proxy", () => {
   beforeEach(() => {
     process.env["BYB_PUBLIC_ORIGIN"] = ORIGIN;
@@ -66,17 +71,17 @@ describe("BYB Auth-Proxy", () => {
   });
 
   it("leitet nur den festen Neon-Pfad weiter und hält die Session first-party", async () => {
-    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe(`${AUTH_BASIS}/sign-in/email`);
+    const fetchMock = vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      expect(urlText(url)).toBe(`${AUTH_BASIS}/sign-in/email`);
       expect(init?.method).toBe("POST");
       expect(new Headers(init?.headers).get("origin")).toBe(ORIGIN);
-      return new Response(JSON.stringify({ user: { email: "a@example.com" } }), {
+      return Promise.resolve(new Response(JSON.stringify({ user: { email: "a@example.com" } }), {
         status: 200,
         headers: {
           "content-type": "application/json",
           "set-cookie": "__Secure-neonauth.session_token=opaque; Domain=auth.example.invalid; Path=/; HttpOnly; Secure; SameSite=None",
         },
-      });
+      }));
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -96,10 +101,10 @@ describe("BYB Auth-Proxy", () => {
   });
 
   it("gibt das bestehende Session-Cookie nur an den Token-Endpunkt weiter", async () => {
-    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
-      expect(String(url)).toBe(`${AUTH_BASIS}/token`);
+    const fetchMock = vi.fn((url: string | URL | Request, init?: RequestInit) => {
+      expect(urlText(url)).toBe(`${AUTH_BASIS}/token`);
       expect(new Headers(init?.headers).get("cookie")).toBe("session=opaque");
-      return Response.json({ token: "jwt-aus-neon" });
+      return Promise.resolve(Response.json({ token: "jwt-aus-neon" }));
     });
     vi.stubGlobal("fetch", fetchMock);
 
