@@ -1,6 +1,6 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M1.4 ist auf `main`; M1.5 / PR #17 ist vollständig für den Owner-Live-Test nachgewiesen und befindet sich im finalen Merge-Gate.**
+Stand: **M1.5 ist auf `main` gemergt und der Owner-Live-Test ist auf der stabilen BYB-Systemdomain freigegeben.**
 
 - M0.5 / PR #7: `main` (`234dbe33`)
 - M0.6 / PR #8: `main` (`8776c66d`)
@@ -12,7 +12,7 @@ Stand: **M1.4 ist auf `main`; M1.5 / PR #17 ist vollständig für den Owner-Live
 - M1.2 / PR #14: `main` (`8bc733ce`)
 - M1.3 / PR #15: `main` (`c3be3765`)
 - M1.4 / PR #16: `main` (`7fac6491`)
-- M1.5: Branch `m15-worker-retry-deadletter`, PR #17
+- M1.5 / PR #17: `main` (`d643cca3`)
 
 ## Produktkern
 
@@ -71,11 +71,11 @@ Checkout-Sessions erfolgreich. Stripe bestätigte danach die Sessions als
 - Projekt `build-your-buissness`
 - ID `prj_VB7ToSJE6spWofEKZRjVyC0d6rOL`
 - stabile Systemdomain `https://build-your-buissness.vercel.app`
-- Production-Deploy aus M1.4-Commit `7fac6491` ist READY
-- `/login.html` ist auf Production mit HTTP 200 erreichbar
-- `/api/auth?aktion=token` liefert ohne Session kontrolliert HTTP 401
-- im letzten Pre-Live-Runtime-Fenster keine Fehler auf Auth/Billing/Checkout/Webhook
-- der geprüfte aktuelle Production-Deploy zeigte keine 5xx; die beobachteten Requests waren HTTP 200
+- Production-Deploy `dpl_GSmHMsf5UcHSoBESTKqUgEjxhaM4` aus M1.5-Commit `d643cca3` ist READY
+- `/login.html` liefert nach dem M1.5-Merge HTTP 200
+- `/api/billing` liefert ohne JWT kontrolliert HTTP 401
+- `/api/stripe-webhook` weist GET kontrolliert mit HTTP 405 ab
+- auf dem neuen M1.5-Production-Deploy wurden im abschließenden Prüfzeitraum keine 5xx gefunden
 
 Frühere Timeout-Cluster gehörten zu einem älteren Deployment und wurden nicht
 dem aktuellen Production-Deploy zugerechnet.
@@ -118,7 +118,7 @@ PR-Synchronisationen keine weiteren Live-Checkout-Sessions erzeugen.
 
 ## M1.5 — begrenzte Worker-Retries und Dead Letter
 
-PR #17 schließt die bisherige Worker-Fehlerlücke:
+PR #17 ist als `d643cca3` nach `main` gemergt.
 
 - Executor-Fehler werden abgefangen und über `entschaerfen()` für das Activity
   Log gekürzt und von bekannten Secret-Mustern bereinigt.
@@ -145,9 +145,9 @@ einen frischen kurzlebigen Neon-Zweig und prüft persistent:
 - Activity Log enthält zwei Retry-Ereignisse und ein terminales Fehlerereignis
 - der Testzweig wird anschließend gelöscht
 
-Der reale Nachweis war grün; auch der bestehende Lease-/RLS-/Mandantenproof war
-grün. Der Code-Gate-Stand umfasst außerdem grüne CI-, Secret-, Sprach-, RLS-,
-Backend-, Connector-Persistenz- und GitHub-Connector-Nachweise.
+Der finale PR-Head bestand CI, Secret-, Sprach-, RLS-, Backend-, Connector-
+Persistenz-, Control-Plane- und GitHub-Connector-Nachweis. Der reale Retry-
+Nachweis und der bestehende Lease-/RLS-/Mandantenproof waren grün.
 
 ## Connector Hub
 
@@ -175,13 +175,12 @@ BYB-Site; vorhandene fremde/andere Sites wurden deshalb nicht verändert.
 Der frühere direkte Import einer normalen Vercel-Seiten-URL war kein gültiger
 Wix-Design-Bundle-Import. Für den Owner-Live-Test ist kein Wix-Write erforderlich.
 
-## Definition „Ready für Owner-Live-Test"
+## Owner-Live-Test: READY
 
-Nach dem Merge von PR #17 und dem READY-Production-Deploy gilt der Owner-Test als
-freigegeben, wenn der finale Merge-Head weiterhin alle normalen Gates besteht
-und auf dem neuen Production-Deploy keine neuen Runtime-5xx beobachtet werden.
+Der Owner-Live-Test ist auf
+`https://build-your-buissness.vercel.app/login.html` freigegeben.
 
-Der Owner testet dann die sichtbare Kette:
+Zu testen ist die sichtbare Kette:
 
 1. Registrierung / Login
 2. Session / Logout / erneuter Login
