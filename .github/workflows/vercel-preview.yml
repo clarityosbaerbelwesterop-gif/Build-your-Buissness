@@ -73,7 +73,7 @@ jobs:
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
         run: |
           set -euo pipefail
-          database_url="$(npx --yes neon@latest connection-string production --project-id "$NEON_PROJECT_ID" --database-name neondb --pooled --ssl verify-full --no-color --no-analytics)"
+          database_url="$(npx --yes neon@latest connection-string production --project-id "$NEON_PROJECT_ID" --database-name neondb --role-name neondb_owner --pooled --ssl verify-full --no-color --no-analytics)"
           case "$database_url" in
             postgresql://*) ;;
             *) echo "Neon lieferte keine gültige Postgres-Verbindung."; exit 1 ;;
