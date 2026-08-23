@@ -6,12 +6,17 @@ const mocks = vi.hoisted(() => ({
   leasen: vi.fn(),
   erneuern: vi.fn(),
   abschliessen: vi.fn(),
+  fehler: vi.fn(),
 }));
 
 vi.mock("../control-plane/speicher.js", () => ({
   naechsteAktionLeasen: mocks.leasen,
   leaseErneuern: mocks.erneuern,
   aktionMitLeaseAbschliessen: mocks.abschliessen,
+}));
+
+vi.mock("../control-plane/fehler-speicher.js", () => ({
+  aktionMitLeaseFehlerSpeichern: mocks.fehler,
 }));
 
 import { workerEinmalAusfuehren } from "./runtime.js";
@@ -22,7 +27,7 @@ const db = {
   },
 };
 
-function lease(): AktionsLease {
+function lease(versuch = 1): AktionsLease {
   return {
     auftragId: "auftrag-1",
     projektId: "projekt-1",
@@ -30,7 +35,7 @@ function lease(): AktionsLease {
     nutzerId: "nutzer-1",
     leaseToken: "11111111-1111-4111-8111-111111111111",
     leaseBisMs: 10_000,
-    versuch: 1,
+    versuch,
     aktion: {
       id: "repo-vorbereiten",
       typ: "repo",
@@ -51,6 +56,7 @@ describe("Worker-Runtime", () => {
     mocks.leasen.mockReset();
     mocks.erneuern.mockReset();
     mocks.abschliessen.mockReset();
+    mocks.fehler.mockReset();
   });
 
   it("beendet einen leeren Poll ohne Executor-Aufruf und filtert auf registrierte Typen", async () => {
@@ -101,7 +107,61 @@ describe("Worker-Runtime", () => {
       1,
       1001,
     );
+    expect(mocks.fehler).not.toHaveBeenCalled();
     expect(ergebnis.status).toBe("abgeschlossen");
+  });
+
+  it("persistiert einen frühen Executor-Fehler als begrenzte Wiederholung", async () => {
+    const geliehen = lease(1);
+    mocks.leasen.mockResolvedValue(geliehen);
+    mocks.erneuern.mockResolvedValue(70_000);
+    mocks.fehler.mockResolvedValue({ wiederholen: true, versuch: 1, auftrag: {} });
+    const executor = {
+      ausfuehren: vi.fn().mockRejectedValue(new Error("Bearer sehr-geheim Provider nicht erreichbar")),
+    };
+
+    const ergebnis = await workerEinmalAusfuehren(
+      db,
+      { repo: executor },
+      { workerId: "worker-1", maxVersuche: 3, zeitstempel: 1000 },
+    );
+
+    expect(mocks.abschliessen).not.toHaveBeenCalled();
+    expect(mocks.fehler).toHaveBeenCalledWith(
+      db,
+      geliehen.auftragId,
+      geliehen.aktionId,
+      geliehen.leaseToken,
+      "Bearer [entfernt] Provider nicht erreichbar",
+      3,
+      1001,
+    );
+    expect(ergebnis).toMatchObject({ status: "wiederholen", versuch: 1 });
+  });
+
+  it("liefert nach ausgeschöpften Versuchen einen terminalen Fehlerzustand zurück", async () => {
+    const geliehen = lease(3);
+    mocks.leasen.mockResolvedValue(geliehen);
+    mocks.erneuern.mockResolvedValue(70_000);
+    mocks.fehler.mockResolvedValue({ wiederholen: false, versuch: 3, auftrag: {} });
+    const executor = { ausfuehren: vi.fn().mockRejectedValue("Provider bleibt nicht erreichbar") };
+
+    const ergebnis = await workerEinmalAusfuehren(
+      db,
+      { repo: executor },
+      { workerId: "worker-1", maxVersuche: 3, zeitstempel: 1000 },
+    );
+
+    expect(mocks.fehler).toHaveBeenCalledWith(
+      db,
+      geliehen.auftragId,
+      geliehen.aktionId,
+      geliehen.leaseToken,
+      "Provider bleibt nicht erreichbar",
+      3,
+      1001,
+    );
+    expect(ergebnis).toMatchObject({ status: "fehlgeschlagen", versuch: 3 });
   });
 
   it("reicht bei leerem Register eine leere Typmenge an die Queue weiter", async () => {
@@ -113,5 +173,6 @@ describe("Worker-Runtime", () => {
     expect(mocks.leasen).toHaveBeenCalledWith(db, "worker-1", 60_000, 1000, []);
     expect(mocks.erneuern).not.toHaveBeenCalled();
     expect(mocks.abschliessen).not.toHaveBeenCalled();
+    expect(mocks.fehler).not.toHaveBeenCalled();
   });
 });
