@@ -1,0 +1,136 @@
+name: M1.5 Worker-Fehler Einmalig
+
+on:
+  push:
+    branches:
+      - m15-worker-retry-deadletter
+    paths:
+      - .github/workflows/m15-worker-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: m15-worker-retry-deadletter
+      - name: Persistente Fehlerpfade ergänzen
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          v1 = Path('control-plane/v1.ts')
+          text = v1.read_text()
+          old = '''export function auftragszustandAbleiten(auftrag: Auftrag): Auftragszustand {\n  const offen = auftrag.aktionen.filter('''
+          new = '''export function auftragszustandAbleiten(auftrag: Auftrag): Auftragszustand {\n  if (auftrag.aktionen.some((aktion) => aktion.zustand === "fehlgeschlagen")) {\n    return "fehlgeschlagen";\n  }\n  const offen = auftrag.aktionen.filter('''
+          if text.count(old) != 1:
+              raise SystemExit('Auftragszustandsableitung konnte nicht eindeutig gepatcht werden')
+          v1.write_text(text.replace(old, new))
+
+          speicher = Path('control-plane/speicher.ts')
+          text = speicher.read_text()
+          import_anchor = '''} from "./v1.js";\nimport {\n  mitNutzerTransaktion,'''
+          import_replacement = '''} from "./v1.js";\nimport {\n  aktionEndgueltigFehlschlagen,\n  aktionZurWiederholungPlanen,\n} from "./fehler.js";\nimport {\n  mitNutzerTransaktion,'''
+          if text.count(import_anchor) != 1:
+              raise SystemExit('Importanker konnte nicht eindeutig gepatcht werden')
+          text = text.replace(import_anchor, import_replacement)
+
+          addition = r'''
+
+const MaxVersuche = z.number().int().min(1).max(20);
+const Fehlertext = z.string().trim().min(3).max(300);
+
+export interface LeaseFehlerErgebnis {
+  readonly auftrag: AuftragTyp;
+  readonly wiederholen: boolean;
+  readonly versuch: number;
+}
+
+export async function aktionMitLeaseFehlerSpeichern(
+  verbindung: SqlVerbindung,
+  auftragId: string,
+  aktionId: string,
+  leaseToken: string,
+  fehlerTextRoh: string,
+  maxVersucheRoh: number,
+  zeitstempel: number,
+): Promise<LeaseFehlerErgebnis> {
+  const fehlerText = Fehlertext.parse(fehlerTextRoh);
+  const maxVersuche = MaxVersuche.parse(maxVersucheRoh);
+
+  return mitWorkerTransaktion(verbindung, async (db) => {
+    const ergebnis = await db.query(
+      `select a.nutzer_id, a.inhalt, x.versuche
+         from steuer_auftraege a
+         join steuer_aktionen x
+           on x.auftrag_id = a.id and x.aktion_id = $2
+        where a.id = $1
+          and x.lease_token = $3::uuid
+          and x.zustand = 'laeuft'
+          and x.lease_bis > now()
+        for update of a, x`,
+      [auftragId, aktionId, leaseToken],
+    );
+    const roh = ergebnis.rows[0];
+    if (roh === undefined) throw new LeaseKonfliktFehler();
+    const zeile = z.object({
+      inhalt: z.unknown(),
+      versuche: z.number().int().min(1),
+    }).parse(roh);
+    const vorher = Auftrag.parse(zeile.inhalt);
+    const wiederholen = zeile.versuche < maxVersuche;
+    const nachher = wiederholen
+      ? aktionZurWiederholungPlanen(
+          vorher,
+          aktionId,
+          fehlerText,
+          zeile.versuche,
+          maxVersuche,
+          zeitstempel,
+        )
+      : aktionEndgueltigFehlschlagen(
+          vorher,
+          aktionId,
+          fehlerText,
+          zeile.versuche,
+          maxVersuche,
+          zeitstempel,
+        );
+
+    await aggregateAktualisieren(db, vorher, nachher);
+    const freigegeben = await db.query(
+      `update steuer_aktionen set
+         lease_token = null,
+         lease_bis = null,
+         lease_owner = null,
+         aktualisiert = now()
+       where auftrag_id = $1 and aktion_id = $2 and lease_token = $3::uuid
+       returning aktion_id`,
+      [auftragId, aktionId, leaseToken],
+    );
+    if (freigegeben.rows.length != 1) throw new LeaseKonfliktFehler();
+
+    return {
+      auftrag: nachher,
+      wiederholen,
+      versuch: zeile.versuche,
+    };
+  });
+}
+'''
+          if 'export async function aktionMitLeaseFehlerSpeichern(' in text:
+              raise SystemExit('Fehlerfunktion ist bereits vorhanden')
+          speicher.write_text(text.rstrip() + addition + '\n')
+          PY
+      - name: Änderung committen
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add control-plane/v1.ts control-plane/speicher.ts
+          git diff --cached --check
+          git commit -m "M1.5: persist bounded retry and terminal worker failure"
+          git push origin HEAD:m15-worker-retry-deadletter
