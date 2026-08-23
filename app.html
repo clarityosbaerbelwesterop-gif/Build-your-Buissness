@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>BYB — Leitstand</title>
+  <meta name="description" content="BYB Leitstand: Ziele beschreiben, Systeme verbinden und autonome Arbeit nachvollziehen.">
+  <style>
+    :root{--ink:#0F1720;--blueprint:#17263A;--paper:#E6E4DD;--stahl:#8894A3;--befund:#E4572E;--siegel:#3F7D5A;--line:#2A3A4F;--white:#F5F6F2;--max:1240px}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--ink);color:var(--white);font-family:Inter,system-ui,-apple-system,sans-serif}a{color:inherit}.wrap{width:min(var(--max),calc(100% - 28px));margin:auto}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.caps{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--stahl)}
+    header{border-bottom:1px solid var(--line);background:#0D1620;position:sticky;top:0;z-index:5}nav{min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:18px}.brand{font-size:20px;font-weight:800;text-decoration:none}.brand span{color:var(--stahl);font-weight:500}.navlinks{display:flex;gap:18px;align-items:center;font-size:13px;color:#BAC4D0}.navlinks a{text-decoration:none}.button{border:1px solid #40546C;background:transparent;color:var(--paper);min-height:42px;padding:0 14px;border-radius:3px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.button.primary{background:var(--paper);color:var(--ink);border-color:var(--paper)}.button:disabled{opacity:.45;cursor:not-allowed}
+    main{padding:30px 0 64px}.topline{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:22px}.topline h1{font-size:clamp(30px,5vw,48px);margin:7px 0 8px;letter-spacing:-.04em}.muted{color:#AAB5C3;line-height:1.55}.credit{border:1px solid var(--line);padding:12px 15px;min-width:150px;text-align:right;background:#111D2A}.credit strong{display:block;font-size:18px}.credit a{font-size:12px;color:#B8C4D2}
+    .layout{display:grid;grid-template-columns:1.22fr .78fr;gap:16px}.panel{background:var(--blueprint);border:1px solid #304158;border-radius:4px;padding:24px}.panel h2{margin:5px 0 9px;font-size:24px;letter-spacing:-.03em}.chatbox textarea{width:100%;min-height:130px;resize:vertical;background:#101B28;border:1px solid #40546C;color:#fff;border-radius:3px;padding:14px;font:inherit;line-height:1.5;margin-top:16px}.chatbox textarea:focus{outline:2px solid var(--paper);outline-offset:2px}.chat-actions{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:12px}.hint{font-size:12px;color:#8F9CAB;max-width:480px}.blocked{border-left:2px solid var(--befund);padding:11px 13px;margin-top:18px;background:#201A1A;color:#D7C2BA;font-size:13px;line-height:1.45}
+    .activity{margin-top:16px}.empty{border:1px dashed #40546C;padding:24px;color:#9EABBA;background:#101B28}.empty strong{display:block;color:#DCE2E8;margin-bottom:5px}.connector-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.connector{border:1px solid #34485E;background:#111D2A;padding:15px;min-height:136px}.connector-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.connector h3{font-size:17px;margin:0}.state{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#A7B2BF}.state.ok{color:#8EC4A5}.state.warn{color:#E5A788}.connector p{font-size:12px;color:#99A7B6;line-height:1.45;margin:14px 0 0}.resource{margin-top:8px;color:#C7D0DB;font-size:12px}.section-gap{margin-top:16px}.accountline{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:17px;margin-top:18px;border-top:1px solid #304158}.accountline span{font-size:12px;color:#AAB5C3;overflow-wrap:anywhere}
+    footer{border-top:1px solid var(--line);padding:28px 0 38px;color:var(--stahl);font-size:12px}.footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.footer nav{min-height:auto;display:flex;gap:14px;flex-wrap:wrap}.footer a{color:#AAB5C3}
+    @media(max-width:820px){.layout{grid-template-columns:1fr}.navlinks a:not(.account-link){display:none}.topline{flex-direction:column}.credit{text-align:left}.connector-grid{grid-template-columns:1fr}.chat-actions{align-items:flex-start;flex-direction:column}.button.primary{width:100%}}
+  </style>
+</head>
+<body>
+<header><nav class="wrap"><a class="brand" href="/app.html">BYB <span>/ Leitstand</span></a><div class="navlinks"><a href="#connectoren">Connectoren</a><a href="#aktivitaet">Aktivität</a><a class="account-link" href="/billing.html">Abrechnung</a></div></nav></header>
+<main class="wrap">
+  <div class="topline"><div><span class="caps">Autonomer AI-Business-Operator</span><h1>Was soll BYB für dich tun?</h1><p class="muted">Beschreibe das Geschäftsziel. BYB verbindet die erlaubten Ressourcen, plant die Arbeit und zeigt jeden relevanten Schritt im Leitstand.</p></div><aside class="credit"><span class="caps">Credits</span><strong id="creditValue">—</strong><a href="/billing.html" id="billingLink">Abrechnung</a></aside></div>
+  <div class="layout">
+    <div>
+      <section class="panel chatbox" aria-labelledby="zielTitel">
+        <span class="caps">Chathub</span><h2 id="zielTitel">Ziel beschreiben</h2>
+        <textarea id="ziel" maxlength="4000" placeholder="Zum Beispiel: Baue mir eine Landingpage für mein neues Angebot, richte Backend und Zahlung ein und bereite den Launch vor."></textarea>
+        <div class="chat-actions"><span class="hint">Die Ausführung wird freigeschaltet, sobald die erforderlichen Kernsysteme produktiv verbunden und der Chathub mit dem Worker gekoppelt sind.</span><button class="button primary" type="button" disabled>BYB starten</button></div>
+        <div class="blocked" id="executionBlock">Noch keine ausführbare Produktverbindung. Der Leitstand zeigt deshalb keinen erfundenen Auftrag und keine Testaktivitäten.</div>
+      </section>
+
+      <section class="panel section-gap" id="aktivitaet" aria-labelledby="aktivitaetTitel">
+        <span class="caps">Activity Log</span><h2 id="aktivitaetTitel">Aktivität</h2>
+        <div class="empty"><strong>Noch keine Aktivität.</strong>Wenn BYB echte Arbeit ausführt, erscheinen hier Zustand, Ergebnis, Credits und gegebenenfalls eine Freigabe. Demo-Aufträge werden nicht als reale Arbeit dargestellt.</div>
+      </section>
+    </div>
+
+    <aside class="panel" id="connectoren" aria-labelledby="connectorTitel">
+      <span class="caps">Connector Hub</span><h2 id="connectorTitel">Deine Systeme</h2><p class="muted">BYB darf nur auf Konten und Ressourcen arbeiten, die du ausdrücklich verbunden hast.</p>
+      <div class="connector-grid" id="connectorGrid" aria-live="polite"></div>
+      <div class="accountline"><span id="accountEmail">Account wird geladen…</span><button class="button" id="logout" type="button">Abmelden</button></div>
+    </aside>
+  </div>
+</main>
+<footer><div class="wrap footer"><span>© ClarityCompassAi · BYB</span><nav aria-label="Rechtliches"><a href="/impressum.html">Impressum</a><a href="/datenschutz.html">Datenschutz</a><a href="/agb.html">AGB</a><a href="/eula.html">EULA</a></nav></div></footer>
+<script>
+(() => {
+  'use strict';
+  const TOKEN_KEY='byb_access_token';
+  const providers=[
+    {key:'github',name:'GitHub',text:'Repository auswählen und BYB nur auf freigegebenen Repos arbeiten lassen.'},
+    {key:'vercel',name:'Vercel',text:'Projekt für Preview und freigegebene Deployments auswählen.'},
+    {key:'neon',alt:'supabase',name:'Neon / Supabase',text:'Genau ein Backend-Projekt pro BYB-Projekt auswählen.'},
+    {key:'stripe',name:'Stripe',text:'Abos, Credits und spätere Produkt-Payments verbinden.'},
+    {key:'google_search_console',name:'Google Search Console',text:'Indexierung nach einem freigegebenen Launch verwalten.'},
+    {key:'higgsfield',name:'Higgsfield',text:'Werbemittel später aus freigegebenen Kampagnenzielen erzeugen.'}
+  ];
+  const grid=document.getElementById('connectorGrid');
+  const credit=document.getElementById('creditValue');
+  const billingLink=document.getElementById('billingLink');
+  const accountEmail=document.getElementById('accountEmail');
+  const logout=document.getElementById('logout');
+  const readJson=async(response)=>{try{return await response.json()}catch{return {}}};
+
+  async function authRequest(aktion,method='GET',body){
+    const init={method,credentials:'same-origin',headers:{accept:'application/json'}};
+    if(body!==undefined){init.headers['content-type']='application/json';init.body=JSON.stringify(body)}
+    return fetch('/api/auth?aktion='+encodeURIComponent(aktion),init);
+  }
+
+  async function tokenAktualisieren(){
+    const response=await authRequest('token');
+    if(!response.ok){localStorage.removeItem(TOKEN_KEY);return null}
+    const data=await readJson(response);
+    if(typeof data.token!=='string'||data.token.length<20){localStorage.removeItem(TOKEN_KEY);return null}
+    localStorage.setItem(TOKEN_KEY,data.token);return data.token;
+  }
+
+  function renderConnectoren(verbindungen){
+    grid.replaceChildren();
+    providers.forEach(provider=>{
+      const verbindung=verbindungen.find(item=>item.anbieter===provider.key||(provider.alt&&item.anbieter===provider.alt));
+      const card=document.createElement('article');card.className='connector';
+      const head=document.createElement('div');head.className='connector-head';
+      const title=document.createElement('h3');title.textContent=provider.name;
+      const state=document.createElement('span');state.className='state';
+      if(verbindung?.status==='verbunden'){state.textContent='Verbunden';state.classList.add('ok')}
+      else if(verbindung?.status==='erneut_anmelden'){state.textContent='Neu anmelden';state.classList.add('warn')}
+      else state.textContent='Nicht verbunden';
+      head.append(title,state);card.append(head);
+      const p=document.createElement('p');p.textContent=provider.text;card.append(p);
+      if(verbindung?.ressourcen?.length){const r=document.createElement('div');r.className='resource';r.textContent=verbindung.ressourcen.map(x=>x.name).join(' · ');card.append(r)}
+      grid.append(card);
+    });
+  }
+
+  async function laden(){
+    const token=await tokenAktualisieren();
+    if(token===null){location.replace('/login.html');return}
+    const session=await readJson(await authRequest('sitzung'));
+    accountEmail.textContent=session?.user?.email||session?.data?.user?.email||'Angemeldet';
+    const headers={authorization:'Bearer '+token,accept:'application/json'};
+    const [billingResponse,connectorResponse]=await Promise.all([fetch('/api/billing',{headers}),fetch('/api/connectors',{headers})]);
+    const billing=await readJson(billingResponse);const connectors=await readJson(connectorResponse);
+    const stand=billing?.billing;
+    if(stand===null||stand===undefined){credit.textContent='Kein Tarif';billingLink.textContent='Tarif wählen'}
+    else{const saldo=Number(stand.saldo);credit.textContent=Number.isFinite(saldo)?String(saldo):'—';if(Number.isFinite(saldo)&&saldo<=0)billingLink.textContent='Credits aufladen'}
+    renderConnectoren(Array.isArray(connectors?.verbindungen)?connectors.verbindungen:[]);
+  }
+
+  logout.addEventListener('click',async()=>{await authRequest('abmelden','POST',{}).catch(()=>undefined);localStorage.removeItem(TOKEN_KEY);location.replace('/login.html')});
+  void laden();
+})();
+</script>
+</body>
+</html>
