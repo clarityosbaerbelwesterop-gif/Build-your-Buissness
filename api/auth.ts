@@ -1,4 +1,4 @@
-import { pflicht } from "../config/umgebung.js";
+import { optional, pflicht } from "../config/umgebung.js";
 
 type AuthAktion = "anmelden" | "abmelden" | "registrieren" | "sitzung" | "token";
 type Methode = "GET" | "POST";
@@ -31,7 +31,10 @@ function aktionsRegel(request: Request, methode: Methode): AuthRegel | undefined
 }
 
 function oeffentlicheOrigin(): string {
-  const roh = pflicht("BYB_PUBLIC_ORIGIN", "BYB-Auth-Origin prüfen");
+  const roh = optional(
+    "BYB_PUBLIC_ORIGIN",
+    "https://build-your-buissness.vercel.app",
+  );
   const url = new URL(roh);
   if (url.protocol !== "https:" || url.origin !== roh.replace(/\/$/, "")) {
     throw new Error("BYB_PUBLIC_ORIGIN muss ein HTTPS-Origin ohne Pfad sein.");
