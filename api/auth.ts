@@ -90,12 +90,14 @@ async function weiterleiten(request: Request, methode: Methode): Promise<Respons
       if (body.length > 16_384) return json({ fehler: "AUTH_ANFRAGE_ZU_GROSS" }, 413);
     }
 
-    const upstream = await fetch(`${basis}${regel.pfad}`, {
+    const init: RequestInit = {
       method: methode,
       headers,
-      body,
       redirect: "manual",
-    });
+    };
+    if (body !== undefined) init.body = body;
+
+    const upstream = await fetch(`${basis}${regel.pfad}`, init);
 
     const antwortHeaders = new Headers({ "cache-control": "no-store" });
     const antwortTyp = upstream.headers.get("content-type");
