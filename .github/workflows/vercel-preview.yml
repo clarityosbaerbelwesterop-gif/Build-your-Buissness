@@ -1,4 +1,4 @@
-name: Vercel Preview
+name: Vercel Runtime Sync
 
 on:
   workflow_dispatch:
@@ -7,16 +7,23 @@ on:
         description: 'Zum Secret-Sync + Preview-Deploy "deploy" eintippen.'
         required: true
         default: "trocken"
+  push:
+    branches:
+      - m13-live-runtime-sync
+    paths:
+      - .github/workflows/vercel-preview.yml
 
 permissions:
   contents: read
 
 env:
   VERCEL_ORG_ID: team_5KyyWAPW9vLU4EiaKaYZuhaG
-  VERCEL_PROJECT_ID: prj_s6KtJoXp0bUMzRs0O6dbI9abd1mB
+  VERCEL_PROJECT_ID: prj_VB7ToSJE6spWofEKZRjVyC0d6rOL
+  BYB_PUBLIC_ORIGIN: https://build-your-buissness.vercel.app
+  EXPECTED_NEON_PROJECT_ID: damp-dream-67070160
 
 jobs:
-  preview:
+  runtime-sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,16 +34,18 @@ jobs:
       - run: npm ci
       - run: npm run pruefen
 
-      - name: Runtime-Zugänge nur auf Vorhandensein prüfen
+      - name: Zugänge und Zielressourcen prüfen
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REPO_VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
-          NEON_AUTH_JWKS_URL: ${{ secrets.NEON_AUTH_JWKS_URL }}
+          STRIPE_SIGNATURE_SECRET: ${{ secrets.STRIPE_SIGNATURE_SECRET }}
         run: |
+          set -euo pipefail
           fehlend=0
-          for name in VERCEL_TOKEN DATABASE_URL STRIPE_SECRET_KEY NEON_AUTH_BASE_URL NEON_AUTH_JWKS_URL; do
+          for name in VERCEL_TOKEN NEON_API_KEY NEON_PROJECT_ID STRIPE_SECRET_KEY STRIPE_SIGNATURE_SECRET; do
             if [ -z "${!name}" ]; then
               echo "$name: nicht gesetzt"
               fehlend=1
@@ -45,21 +54,72 @@ jobs:
             fi
           done
           if [ "$fehlend" -ne 0 ]; then exit 1; fi
+          if [ "$NEON_PROJECT_ID" != "$EXPECTED_NEON_PROJECT_ID" ]; then
+            echo "NEON_PROJECT_ID zeigt nicht auf das freigegebene BYB-Projekt."
+            exit 1
+          fi
+          if [ -n "$REPO_VERCEL_PROJECT_ID" ] && [ "$REPO_VERCEL_PROJECT_ID" != "$VERCEL_PROJECT_ID" ]; then
+            echo "VERCEL_PROJECT_ID im Repo zeigt nicht auf das verifizierte BYB-Projekt."
+            exit 1
+          fi
+
+      - name: Neon Runtime-Konfiguration ableiten
+        if: github.event_name == 'push' || inputs.deploy == 'deploy'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          database_url="$(npx --yes neon@latest connection-string production --project-id "$NEON_PROJECT_ID" --database-name neondb --pooled --ssl verify-full --no-color --no-analytics)"
+          case "$database_url" in
+            postgresql://*) ;;
+            *) echo "Neon lieferte keine gültige Postgres-Verbindung."; exit 1 ;;
+          esac
+          echo "::add-mask::$database_url"
+
+          auth_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/br-patient-snow-b11ksdc8/auth")"
+          auth_base_url="$(printf '%s' "$auth_json" | jq -r '.base_url // empty')"
+          auth_jwks_url="$(printf '%s' "$auth_json" | jq -r '.jwks_url // empty')"
+          if [ -z "$auth_base_url" ] || [ -z "$auth_jwks_url" ]; then
+            echo "Neon Auth ist vorhanden, aber Base- oder JWKS-URL fehlt."
+            exit 1
+          fi
+
+          printf 'DATABASE_URL=%s\n' "$database_url" >> "$GITHUB_ENV"
+          printf 'NEON_AUTH_BASE_URL=%s\n' "$auth_base_url" >> "$GITHUB_ENV"
+          printf 'NEON_AUTH_JWKS_URL=%s\n' "$auth_jwks_url" >> "$GITHUB_ENV"
+          echo "Neon Runtime-Konfiguration aufgelöst."
+
+      - name: Vercel-Domain in Neon Auth freigeben
+        if: github.event_name == 'push' || inputs.deploy == 'deploy'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          domains_json="$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/br-patient-snow-b11ksdc8/auth/domains")"
+          if printf '%s' "$domains_json" | jq -e --arg origin "$BYB_PUBLIC_ORIGIN" '.. | strings | select(. == $origin)' >/dev/null; then
+            echo "BYB-Vercel-Origin ist bereits als Neon-Auth-Domain freigegeben."
+          else
+            npx --yes neon@latest neon-auth domain add "$BYB_PUBLIC_ORIGIN" \
+              --project-id "$NEON_PROJECT_ID" --branch production --no-color --no-analytics >/dev/null
+            echo "BYB-Vercel-Origin als Neon-Auth-Domain freigegeben."
+          fi
 
       - name: Trockenlauf
-        if: inputs.deploy != 'deploy'
+        if: github.event_name == 'workflow_dispatch' && inputs.deploy != 'deploy'
         run: echo 'Kein Vercel-Write. Für Sync + Preview-Deploy mit "deploy" starten.'
 
-      - name: Preview-Secrets synchronisieren
-        if: inputs.deploy == 'deploy'
+      - name: Runtime-Secrets nach Vercel synchronisieren
+        if: github.event_name == 'push' || inputs.deploy == 'deploy'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
-          NEON_AUTH_JWKS_URL: ${{ secrets.NEON_AUTH_JWKS_URL }}
-          NEON_AUTH_ISSUER: ${{ secrets.NEON_AUTH_ISSUER }}
-          NEON_AUTH_AUDIENCE: ${{ secrets.NEON_AUTH_AUDIENCE }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_SIGNATURE_SECRET }}
           NV_API_KEY_1: ${{ secrets.NV_API_KEY_1 }}
           NV_API_KEY_2: ${{ secrets.NV_API_KEY_2 }}
           NV_API_KEY_3: ${{ secrets.NV_API_KEY_3 }}
@@ -74,23 +134,24 @@ jobs:
               return 0
             fi
             echo "::add-mask::$value"
-            npx --yes vercel@latest env rm "$name" preview --yes --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
-            printf '%s' "$value" | npx --yes vercel@latest env add "$name" preview --sensitive --token "$VERCEL_TOKEN" >/dev/null
-            echo "$name: preview synchronisiert"
+            for target in preview production; do
+              npx --yes vercel@latest env rm "$name" "$target" --yes --token "$VERCEL_TOKEN" >/dev/null 2>&1 || true
+              printf '%s' "$value" | npx --yes vercel@latest env add "$name" "$target" --sensitive --token "$VERCEL_TOKEN" >/dev/null
+              echo "$name: $target synchronisiert"
+            done
           }
           sync_secret DATABASE_URL "$DATABASE_URL"
           sync_secret STRIPE_SECRET_KEY "$STRIPE_SECRET_KEY"
+          sync_secret STRIPE_WEBHOOK_SECRET "$STRIPE_WEBHOOK_SECRET"
           sync_secret NEON_AUTH_BASE_URL "$NEON_AUTH_BASE_URL"
           sync_secret NEON_AUTH_JWKS_URL "$NEON_AUTH_JWKS_URL"
-          sync_secret NEON_AUTH_ISSUER "$NEON_AUTH_ISSUER"
-          sync_secret NEON_AUTH_AUDIENCE "$NEON_AUTH_AUDIENCE"
           sync_secret NV_API_KEY_1 "$NV_API_KEY_1"
           sync_secret NV_API_KEY_2 "$NV_API_KEY_2"
           sync_secret NV_API_KEY_3 "$NV_API_KEY_3"
           sync_secret NVIDIA_BASE_URL "$NVIDIA_BASE_URL"
 
       - name: Vercel Preview deployen
-        if: inputs.deploy == 'deploy'
+        if: github.event_name == 'push' || inputs.deploy == 'deploy'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
