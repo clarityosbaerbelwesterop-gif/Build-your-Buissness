@@ -1,0 +1,129 @@
+name: Pre-Live Auth-Proof Manuell
+
+# Kontrollierter Owner-Pre-Live-Proof gegen die stabile BYB-Systemdomain.
+# Bewusst nur manuell: der Lauf registriert kurzzeitig einen Testnutzer und
+# erzeugt vier unbezahlte Live-Checkout-Sessions. Der Testnutzer wird im
+# finally-Cleanup wieder aus Neon Auth entfernt.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BYB_ORIGIN: https://build-your-buissness.vercel.app
+  EXPECTED_NEON_PROJECT_ID: damp-dream-67070160
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Production-Ziel und Cleanup-Zugang vorbereiten
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NEON_API_KEY" ] || [ "$NEON_PROJECT_ID" != "$EXPECTED_NEON_PROJECT_ID" ]; then
+            echo "Neon-Projektzugang für den kontrollierten Cleanup fehlt oder zeigt auf das falsche Projekt."
+            exit 1
+          fi
+          database_url="$(npx --yes neon@latest connection-string production --project-id "$NEON_PROJECT_ID" --database-name neondb --role-name neondb_owner --pooled --ssl verify-full --no-color --no-analytics)"
+          case "$database_url" in postgresql://*) ;; *) exit 1 ;; esac
+          echo "::add-mask::$database_url"
+          printf 'DATABASE_URL=%s\n' "$database_url" >> "$GITHUB_ENV"
+      - name: Registrierung, JWT, RLS und Checkout real prüfen
+        run: |
+          set -euo pipefail
+          email="byb-prelive-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}@example.com"
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          cookie="$(mktemp)"
+          signup="$(mktemp)"
+          token_file="$(mktemp)"
+          export TEST_USER_ID=""
+
+          cleanup() {
+            rm -f "$cookie" "$signup" "$token_file"
+            if [ -n "${TEST_USER_ID:-}" ]; then
+              node --input-type=module <<'NODE'
+          import pg from 'pg';
+          const { Client } = pg;
+          const id = process.env.TEST_USER_ID;
+          const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: true } });
+          await client.connect();
+          try {
+            await client.query('delete from neon_auth."user" where id = $1', [id]);
+            const check = await client.query('select 1 from neon_auth."user" where id = $1', [id]);
+            if (check.rows.length !== 0) throw new Error('Testnutzer wurde nicht vollständig entfernt.');
+          } finally {
+            await client.end();
+          }
+          NODE
+            fi
+          }
+          trap cleanup EXIT
+
+          status="$(curl --silent --show-error --output "$signup" --write-out '%{http_code}' \
+            --cookie-jar "$cookie" \
+            --header "Origin: $BYB_ORIGIN" \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -nc --arg name 'BYB Prelive Proof' --arg email "$email" --arg password "$password" '{name:$name,email:$email,password:$password}')" \
+            "$BYB_ORIGIN/api/auth?aktion=registrieren")"
+          test "$status" = "200"
+          TEST_USER_ID="$(jq -r '.user.id // .data.user.id // empty' "$signup")"
+          if [ -z "$TEST_USER_ID" ]; then
+            echo "Registrierung lieferte keine Testnutzer-ID."
+            exit 1
+          fi
+          export TEST_USER_ID
+
+          status="$(curl --silent --show-error --output "$token_file" --write-out '%{http_code}' \
+            --cookie "$cookie" \
+            --header "Origin: $BYB_ORIGIN" \
+            "$BYB_ORIGIN/api/auth?aktion=token")"
+          test "$status" = "200"
+          token="$(jq -r '.token // empty' "$token_file")"
+          if [ -z "$token" ]; then exit 1; fi
+          echo "::add-mask::$token"
+
+          status="$(curl --silent --show-error --output /tmp/session.json --write-out '%{http_code}' \
+            --cookie "$cookie" --header "Origin: $BYB_ORIGIN" \
+            "$BYB_ORIGIN/api/auth?aktion=sitzung")"
+          test "$status" = "200"
+
+          status="$(curl --silent --show-error --output /tmp/billing.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer $token" \
+            "$BYB_ORIGIN/api/billing")"
+          test "$status" = "200"
+          jq -e 'has("billing")' /tmp/billing.json >/dev/null
+
+          checkout() {
+            label="$1"
+            payload="$2"
+            out="/tmp/checkout-$label.json"
+            status="$(curl --silent --show-error --output "$out" --write-out '%{http_code}' \
+              --header "Authorization: Bearer $token" \
+              --header 'Content-Type: application/json' \
+              --data "$payload" \
+              "$BYB_ORIGIN/api/checkout")"
+            if [ "$status" != "200" ]; then
+              echo "$label Checkout lieferte HTTP $status."
+              return 1
+            fi
+            jq -e '.checkoutUrl | strings | startswith("https://")' "$out" >/dev/null
+          }
+
+          checkout starter '{"art":"abo","planKey":"starter"}'
+          checkout pro '{"art":"abo","planKey":"pro"}'
+          checkout scale '{"art":"abo","planKey":"scale"}'
+          checkout topup '{"art":"topup"}'
+
+          echo "Production-Proof: Registrierung, Session, JWT, Billing-RLS und vier Checkout-Sessions ohne Zahlung erfolgreich."

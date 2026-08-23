@@ -1,6 +1,6 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M1.3 ist auf `main`; M1.4 ist in PR #16 gebaut und auf dem finalen Code-Stand grün geprüft.**
+Stand: **M1.4 ist auf `main`; M1.5 / PR #17 ist vollständig für den Owner-Live-Test nachgewiesen und befindet sich im finalen Merge-Gate.**
 
 - M0.5 / PR #7: `main` (`234dbe33`)
 - M0.6 / PR #8: `main` (`8776c66d`)
@@ -11,7 +11,8 @@ Stand: **M1.3 ist auf `main`; M1.4 ist in PR #16 gebaut und auf dem finalen Code
 - M1.1 / PR #13: `main` (`407a8713`)
 - M1.2 / PR #14: `main` (`8bc733ce`)
 - M1.3 / PR #15: `main` (`c3be3765`)
-- M1.4: Branch `m14-user-auth-e2e`, PR #16; Code-Head `632409e1`.
+- M1.4 / PR #16: `main` (`7fac6491`)
+- M1.5: Branch `m15-worker-retry-deadletter`, PR #17
 
 ## Produktkern
 
@@ -23,235 +24,185 @@ Der Nutzer verbindet Unternehmenssysteme und wählt die konkreten Ressourcen,
 auf denen BYB arbeiten darf. Der interne Auftrag ist Ausführungs- und
 Wiederaufnahme-Infrastruktur, nicht die primäre Nutzeroberfläche.
 
-## Auf `main` bereits vorhanden
+## Produktionsbasis
 
-### Control Plane und Worker
+### Neon
 
-- persistente Aufträge, Aktionen und Activity Log
-- Approval- und Credit-Grenzen
-- Worker-Leases mit Ablauf, Erneuerung und kontrolliertem Abschluss
-- Worker leasen nur Aktionstypen, für die ein Executor registriert ist
-- isolierter realer GitHub-Branch-Write-Proof wurde erfolgreich ausgeführt
+- Projekt `damp-dream-67070160`, Branch `production`
+- Migrationen 002–005 produktiv angewendet
+- Control Plane, Connector-Persistenz, Billing-/Credit-Ledger vorhanden
+- Rollen `byb_app`, `byb_worker`, `byb_billing` getrennt
+- FORCE RLS auf den sieben geprüften mandantenbezogenen BYB-Tabellen
+- Managed Neon Auth aktiv
+- `https://build-your-buissness.vercel.app` als Trusted Origin
+- E-Mail/Passwort aktiv; Google Shared OAuth vorhanden
 
-### Connector Hub
+Der Production-Pre-Live-Proof erzeugte einen kurzlebigen Testnutzer und räumte
+ihn anschließend wieder auf. Danach wurden geprüft:
 
-Modelliert sind unter anderem GitHub, Neon/Supabase, Vercel, Stripe,
-Higgsfield, Meta Ads, TikTok Ads, YouTube, Google Ads, Search Console und Wix.
+- `0` verbliebene `byb-prelive-*`-Testnutzer
+- `0` verwaiste Billing-Konten
+- `0` verwaiste Credit-Konten
 
-Persistiert werden ausschließlich Connection-/Resource-Referenzen. OAuth-
-Tokens, Refresh-Tokens, API-Keys und Provider-Secrets gehören nicht in die
-Control Plane.
+### Stripe
 
-Die Tabellen `connector_verbindungen` und `connector_projekt_werkzeuge` sind
-RLS-geschützt. `byb_worker` darf Connector-Picks nur lesen, nicht umschreiben.
+Der BYB-Katalog ist vom Altbestand über `application=byb` und
+`namespace=byb_preview_v1` getrennt.
 
-### Neon Production
-
-Projekt: `damp-dream-67070160`, Branch `production`.
-
-Migrationen 002–005 sind produktiv angewendet. Vorhanden sind unter anderem:
-
-- Control-Plane-Tabellen
-- Connector-Persistenz
-- Billing-Konten und Abos
-- Credit-Konten und Credit-Buchungen
-- idempotente Stripe-Webhook-Ereignisse
-- `byb_app`, `byb_worker`, `byb_billing` mit getrennten Rechten
-- FORCE RLS auf den mandantenbezogenen BYB-Tabellen
-- Managed Neon Auth
-
-Neon Auth erlaubt die stabile BYB-Systemdomain
-`https://build-your-buissness.vercel.app` als Trusted Origin. Google OAuth ist
-über Neons Shared Provider vorhanden; E-Mail/Passwort-Anmeldung ist aktiviert.
-
-### Stripe Billing und Credits
-
-Der BYB-Katalog ist strikt von vorhandenen älteren Stripe-Produkten getrennt.
-BYB-Objekte tragen den Namespace `byb_preview_v1` / `application=byb`.
-
-Aktuelle Preise:
+Für den kontrollierten Owner-Live-Test sind alle vier BYB-Produkte im
+vorhandenen Live-Stripe-Konto aktiv. Die im Repo hinterlegten Price-IDs wurden
+gegen Stripe gelesen und stimmen bei Betrag, Typ, Intervall, Credits,
+Lookup-Key und Produktzuordnung:
 
 - Starter: 20 EUR/Monat, 100 Credits
 - Pro: 200 EUR/Monat, 750 Credits
 - Scale: 250 EUR/Monat, 1.500 Credits
 - Top-up: 25 EUR einmalig, 100 Credits
 
-Der Backend-Pfad verarbeitet BYB-Checkout-/Invoice-/Subscription-Events und
-schreibt Credits idempotent nach Neon. Fremde Stripe-Produkte werden ignoriert.
-
-Der produktive BYB-Webhook `we_1U7YtQEmDA2oLCportbRSUaX` zeigt auf:
-
+Produktiver BYB-Webhook:
 `https://build-your-buissness.vercel.app/api/stripe-webhook`
 
-Er empfängt ausschließlich:
+Der reale Production-Proof erzeugte für einen kurzlebigen Testnutzer alle vier
+Checkout-Sessions erfolgreich. Stripe bestätigte danach die Sessions als
+`open` und `unpaid`; es wurde keine Zahlung bestätigt.
 
-- `checkout.session.completed`
-- `invoice.paid`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
+### Vercel
 
-Alte Stripe-Webhooks anderer Projekte wurden nicht verändert.
+- Projekt `build-your-buissness`
+- ID `prj_VB7ToSJE6spWofEKZRjVyC0d6rOL`
+- stabile Systemdomain `https://build-your-buissness.vercel.app`
+- Production-Deploy aus M1.4-Commit `7fac6491` ist READY
+- `/login.html` ist auf Production mit HTTP 200 erreichbar
+- `/api/auth?aktion=token` liefert ohne Session kontrolliert HTTP 401
+- im letzten Pre-Live-Runtime-Fenster keine Fehler auf Auth/Billing/Checkout/Webhook
+- der geprüfte aktuelle Production-Deploy zeigte keine 5xx; die beobachteten Requests waren HTTP 200
 
-## M1.3 — Live-Runtime und Secret-Sync
+Frühere Timeout-Cluster gehörten zu einem älteren Deployment und wurden nicht
+dem aktuellen Production-Deploy zugerechnet.
 
-PR #15 korrigierte die Vercel-API-Routen auf Method-Handler (`GET`/`POST`) und
-wurde als `c3be3765` nach `main` gemergt.
+Custom Domain bleibt bis nach dem Owner-Live-Test unangetastet.
 
-Der dauerhafte Workflow `.github/workflows/vercel-preview.yml` ist
-**workflow_dispatch-only**. Er prüft Zielressourcen, leitet die Neon-Runtime-
-Konfiguration kontrolliert ab und synchronisiert die benötigten Runtime-Secrets
-nach Preview + Production des freigegebenen BYB-Vercel-Projekts.
+## M1.4 — First-Party Auth und Billing-Testoberfläche
 
-`NEON_API_KEY` wird nicht in die Vercel-Web-Runtime kopiert. Der Stripe-
-Repository-Secretname `STRIPE_SIGNATURE_SECRET` wird ausschließlich als
-Runtime-Variable `STRIPE_WEBHOOK_SECRET` gespiegelt.
+PR #16 ist gemergt.
 
-Der reale M1.3-Proof bestätigte:
+`/api/auth` ist eine Same-Origin-Grenze vor Managed Neon Auth und erlaubt nur
+Registrierung, Anmeldung, Sitzung, JWT und Abmeldung. Fremde Browser-Origins
+werden abgelehnt; Session-Cookies bleiben first-party auf der BYB-Domain.
 
-- Lint, TypeScript und Vitest grün
-- Secret- und Sprach-Gates grün
-- Neon Runtime-Konfiguration aufgelöst
-- Neon Auth Trusted Origin gesetzt
-- Vercel Runtime-Secrets nach Preview + Production synchronisiert
-- Preview READY
-- Production-Deploy aus dem Merge READY
-- Landingpage HTTP 200
-- `/api/billing` ohne JWT kontrolliert HTTP 401
-- `/api/stripe-webhook` auf GET HTTP 405
-- im geprüften Zeitraum keine Vercel-Runtime-Fehler gefunden
+`/login.html` bietet:
 
-## M1.4 — First-Party Auth und Billing-Live-Test
-
-PR #16 schließt die bisher fehlende sichtbare E-Mail/Passwort-Anmeldung für den
-Owner-/Pre-Live-Test.
-
-### Auth-Grenze
-
-`/api/auth` ist ein Same-Origin-Proxy vor Managed Neon Auth. Er ist kein freier
-HTTP-Proxy, sondern erlaubt nur fünf feste Aktionen:
-
-- Registrierung → `/sign-up/email`
-- Anmeldung → `/sign-in/email`
-- Sitzung → `/get-session`
-- JWT → `/token`
-- Abmeldung → `/sign-out`
-
-Jede Aktion ist an ihre HTTP-Methode gebunden. Fremde Browser-Origins werden vor
-dem Neon-Upstream abgelehnt. Session-Cookies werden ohne fremde Domain-Angabe
-und mit `Path=/api/auth` an die BYB-Domain zurückgegeben. Dadurch läuft der
-Browserpfad first-party über BYB statt über ein direktes Cross-Site-Cookie zum
-Neon-Host.
-
-Die Auth-Grenze akzeptiert absichtlich nur die stabile BYB-Systemdomain. Vercel-
-Preview-Domains können deshalb den realen Login nicht benutzen; der echte
-Session/JWT-Proof erfolgt erst nach Merge auf Production.
-
-### Live-Test-Oberfläche
-
-`/login.html` enthält:
-
-- Registrieren
-- Anmelden
-- Sitzung/JWT erneuern
-- Abmelden
-- RLS-geschützten `/api/billing`-Stand lesen
-- Starter-, Pro- und Scale-Checkout öffnen
+- Registrieren / Anmelden / Abmelden
+- kurzlebiges JWT erneuern
+- RLS-geschützten Billing-Stand lesen
+- Starter-/Pro-/Scale-Checkout öffnen
 - Top-up-Checkout öffnen
 
-Die Landingpage verlinkt `Anmelden / Live-Test`. Ein Checkout-Klick ohne JWT
-führt ebenfalls zur Anmeldung.
+### Echter Production-Proof
 
-### M1.4 Verifikation auf Code-Head `632409e1`
+Der erfolgreiche GitHub-Actions-Proof gegen die stabile BYB-Systemdomain hat
+nachgewiesen:
 
-- CI: grün
-- Lint: grün
-- TypeScript: grün
-- Tests: grün
-- Abhängigkeitsprüfung: grün
-- Geheimnisse: grün
-- Sprache: grün
-- Vercel Preview: READY
-- temporärer `contents: write`-Workflow wurde nach exakt zwei vorgesehenen
-  `index.html`-Änderungen wieder aus dem Branch entfernt
+1. Registrierung eines zufälligen Kurzzeitnutzers
+2. gültige Session und JWT-Ausgabe
+3. RLS-geschützter `/api/billing`-Read mit HTTP 200
+4. Starter-Checkout erzeugt
+5. Pro-Checkout erzeugt
+6. Scale-Checkout erzeugt
+7. Top-up-Checkout erzeugt
+8. keine Zahlung bestätigt
+9. Testnutzer im Cleanup aus Neon Auth entfernt
 
-Zwei frühere CI-Runden waren ausschließlich wegen strenger Lint-/TypeScript-
-Regeln im neuen Test bzw. Fetch-Init rot. Beide Ursachen wurden behoben; der
-aktuelle Head ist grün.
+Der Proof-Workflow bleibt ausschließlich manuell ausführbar, damit normale
+PR-Synchronisationen keine weiteren Live-Checkout-Sessions erzeugen.
 
-## Vercel
+## M1.5 — begrenzte Worker-Retries und Dead Letter
 
-Zielprojekt:
+PR #17 schließt die bisherige Worker-Fehlerlücke:
 
-- Name: `build-your-buissness`
-- ID: `prj_VB7ToSJE6spWofEKZRjVyC0d6rOL`
-- GitHub: `clarityosbaerbelwesterop-gif/Build-your-Buissness`
-- stabile System-/Vorschaudomain: `https://build-your-buissness.vercel.app`
+- Executor-Fehler werden abgefangen und über `entschaerfen()` für das Activity
+  Log gekürzt und von bekannten Secret-Mustern bereinigt.
+- Standardgrenze: drei Versuche.
+- Vor Erreichen der Grenze wird die laufende Aktion atomar auf `geplant`
+  zurückgesetzt, das Lease entfernt und die Wiederholung protokolliert.
+- Beim ausgeschöpften Versuch werden Aktion und Auftrag terminal auf
+  `fehlgeschlagen` gesetzt.
+- Der terminale Zustand ist das Dead Letter des Auftrags und bleibt mit
+  Versuchszahl und Fehlerbeleg sichtbar.
+- Fehlerübergang, Lease-Freigabe und Activity Log laufen in derselben
+  `byb_worker`-Transaktion.
 
-Die Custom Domain bleibt bis nach dem vollständigen Nutzer-Live-Test
-unangetastet.
+### Echter Neon-Nachweis
 
-## Noch offen vor „Ready für Live-Test“
+`db/worker-fehler-nachweis.ts` läuft im bestehenden Control-Plane-Gate gegen
+einen frischen kurzlebigen Neon-Zweig und prüft persistent:
 
-### 1. M1.4 Production-Proof
+- Fehlversuch 1 → wieder eingeplant
+- Fehlversuch 2 → wieder eingeplant
+- Fehlversuch 3 → terminal `fehlgeschlagen`
+- Projektion enthält `versuche = 3`
+- Lease-Token, Lease-Ablauf und Lease-Owner sind danach geräumt
+- Activity Log enthält zwei Retry-Ereignisse und ein terminales Fehlerereignis
+- der Testzweig wird anschließend gelöscht
 
-Nach Merge von PR #16:
+Der reale Nachweis war grün; auch der bestehende Lease-/RLS-/Mandantenproof war
+grün. Der Code-Gate-Stand umfasst außerdem grüne CI-, Secret-, Sprach-, RLS-,
+Backend-, Connector-Persistenz- und GitHub-Connector-Nachweise.
 
-- `/login.html` öffentlich auf der stabilen BYB-Domain prüfen
-- Auth-Whitelist und Origin-Grenze auf Production prüfen
-- echte Neon-Session/JWT-Kette über die BYB-Domain prüfen
-- Billing-RLS mit einem angemeldeten Nutzer prüfen
-- Checkout-Session ohne Zahlung öffnen
+## Connector Hub
 
-### 2. Echte Nutzer-Connectoren
+Persistiert sind Connection- und Resource-Picks, unter anderem für GitHub,
+Neon/Supabase, Vercel, Stripe, Wix und spätere Growth-Provider. Tokens,
+Refresh-Tokens und API-Keys werden nicht in der Control Plane gespeichert.
 
-Connection-/Resource-Persistenz steht. Für öffentliche Nutzer fehlen weiterhin
-die vollständigen Provider-OAuth-/Credential-Flows und Resource Discovery,
-insbesondere GitHub, Vercel, Neon/Supabase und Stripe. Provider-App-Zugänge
-werden nicht erfunden oder aus ChatGPT-Connector-Credentials exportiert.
+Der isolierte echte GitHub-Branch-Write-Proof ist vorhanden. Die in ChatGPT
+verbundenen GitHub-/Vercel-/Neon-/Stripe-/Wix-Konten dienen nur der aktuellen
+Owner-/Entwicklungsarbeit und werden nicht als exportierbare BYB-
+Produktcredentials ausgegeben.
 
-### 3. Vollständiger Worker-Betrieb
+Für öffentliches Nutzer-Onboarding fehlen weiterhin BYB-eigene Provider-OAuth-
+Apps/Credentials und die vollständige Resource Discovery für die jeweiligen
+Provider. Das blockiert nicht den aktuellen Owner-Live-Test der bereits
+verbundenen Produktionsbasis, ist aber vor einem öffentlichen Launch zu
+schließen.
 
-Noch fehlen begrenzte Retries, Fehlerklassifikation, Dead-Letter-Zustand und
-eine dauerhaft laufende Cloud-Worker-Runtime. Der GitHub-Write ist bisher ein
-isolierter Proof, kein vollständiger autonomer Produktbetrieb.
+## Wix
 
-### 4. Wix-Designquelle
+Wix bleibt gemäß `DESIGN-UI.md` ausschließlich internes Design-/Vergleichswerkzeug
+und ist keine Production-Abhängigkeit. Im verbundenen Wix-Konto existiert keine
+BYB-Site; vorhandene fremde/andere Sites wurden deshalb nicht verändert.
 
-Der Import der bestehenden BYB-Vercel-Seite in Wix wurde versucht, von Wix aber
-als ungültige Design-URL abgelehnt. Bestehende fremde Wix-Sites wurden nicht
-verändert. Wix bleibt gemäß `DESIGN-UI.md` Design-/Vergleichswerkzeug und ist
-keine Production-Abhängigkeit.
+Der frühere direkte Import einer normalen Vercel-Seiten-URL war kein gültiger
+Wix-Design-Bundle-Import. Für den Owner-Live-Test ist kein Wix-Write erforderlich.
 
-### 5. Pre-Live-End-to-End-Test
+## Definition „Ready für Owner-Live-Test"
 
-Vor Custom Domain und Indexierung müssen mindestens diese Pfade geprüft sein:
+Nach dem Merge von PR #17 und dem READY-Production-Deploy gilt der Owner-Test als
+freigegeben, wenn der finale Merge-Head weiterhin alle normalen Gates besteht
+und auf dem neuen Production-Deploy keine neuen Runtime-5xx beobachtet werden.
 
-- Sign-up/Login → gültiges Neon-JWT
-- Nutzer-RLS und Billing-Read
-- Starter/Pro/Scale Checkout
-- einmaliger Top-up
-- Stripe-Webhook → idempotentes Credit-Ledger
-- Connector wählen → Auftrag → Worker → Ergebnis/Activity Log
-- Vercel Production ohne beobachtete Runtime-5xx im Prüfzeitraum
-- vollständiger Debug-/Security-Test gegen die freigegebene BYB-Testumgebung
+Der Owner testet dann die sichtbare Kette:
 
-### 6. Später, bewusst noch nicht
+1. Registrierung / Login
+2. Session / Logout / erneuter Login
+3. Billing-Stand
+4. Starter-, Pro-, Scale- und Top-up-Checkout bis zur Stripe-Zahlseite
+5. keine echte Zahlung, außer sie wird bewusst als separater Finanztest ausgelöst
 
-- Custom Domain
-- Search Console / Indexierung
-- Higgsfield-Werbemittel für BYB selbst
-- Meta/TikTok/YouTube/Google-Ads-Betrieb für BYB selbst
+## Bewusst danach
 
-Diese Schritte kommen erst nach dem Nutzer-Live-Test.
+Nach bestandenem Owner-Live-Test:
 
-## Nächste Umsetzung
+1. Custom Domain
+2. Search Console / Indexierung
+3. Werbespots und Creatives für **BYB selbst**
+4. anschließend Meta/TikTok/YouTube/Google-Ads-Betrieb für BYB
 
-1. PR #16 mergen und Production-Auth/Billing prüfen.
-2. Worker-Retry/Failure-/Dead-Letter-Semantik schließen.
-3. Den echten Connector-/Auftrag-/Worker-Pfad soweit mit vorhandenen Provider-
-   Berechtigungen möglich schließen und fehlende Provider-App-Credentials klar
-   als externe Voraussetzung ausweisen.
-4. Pre-Live Debug-/Security-/Runtime-Gates ausführen.
-5. Erst wenn diese Gates grün bzw. externe Voraussetzungen eindeutig benannt
-   sind, den Stand als bereit für den Nutzer-Live-Test melden.
-6. Nach dem Nutzer-Live-Test: Custom Domain; danach Werbespots und Ads für BYB.
+Vor einem öffentlichen Nutzerlaunch zusätzlich:
+
+- BYB-eigene OAuth-/Provider-App-Credentials und Resource Discovery
+- dauerhafter Cloud-Worker mit diesen Produktcredentials
+- echte isolierte Sandbox-Laufzeit für dynamische Debug-/Security-Angriffe
+
+Bis eine isolierte Sandbox existiert, werden dynamische Angriffstests nicht als
+durchgeführt ausgewiesen.

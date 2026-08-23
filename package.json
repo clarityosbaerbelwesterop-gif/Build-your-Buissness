@@ -17,7 +17,7 @@
     "pruefen": "npm run lint && npm run typecheck && npm run test",
     "rls": "tsx db/rls-nachweis.ts",
     "backend:nachweis": "tsx db/protokoll-nachweis.ts",
-    "controlplane:nachweis": "tsx db/control-plane-nachweis.ts",
+    "controlplane:nachweis": "tsx db/control-plane-nachweis.ts && tsx db/worker-fehler-nachweis.ts",
     "connector:nachweis": "tsx db/connector-hub-nachweis.ts",
     "github:live": "tsx worker/github-live-nachweis.ts",
     "github:write": "tsx worker/github-write-nachweis.ts"
