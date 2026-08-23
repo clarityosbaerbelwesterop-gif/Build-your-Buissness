@@ -27,7 +27,7 @@
   </style>
 </head>
 <body>
-<header><nav class="wrap"><div class="brand">BYB <span>/ Build your Buissness</span></div><div class="navlinks"><a href="#prozess">Prozess</a><a href="#connectoren">Connectoren</a><a href="#preise">Preise</a><a href="#leitstand">Leitstand</a></div><a class="button secondary" href="#leitstand">Vorschau öffnen</a></nav></header>
+<header><nav class="wrap"><div class="brand">BYB <span>/ Build your Buissness</span></div><div class="navlinks"><a href="#prozess">Prozess</a><a href="#connectoren">Connectoren</a><a href="#preise">Preise</a><a href="#leitstand">Leitstand</a></div><a class="button secondary" href="/login.html">Anmelden / Live-Test</a></nav></header>
 <main>
   <section class="hero"><div class="wrap hero-grid"><div><div class="eyebrow"><i class="dot"></i> AUTONOMER AI-BUSINESS-OPERATOR</div><h1>Vom Repo bis zum Deploy bis zum Werbespot. <em>BYB macht alles für dich.</em></h1><p class="lead">Du beschreibst das Ziel. BYB verbindet deine Systeme, plant, baut, testet, veröffentlicht, beobachtet und verbessert — mit nachvollziehbaren Aktionen statt Blackbox-Automation.</p><div class="actions"><a class="button" href="#leitstand">Leitstand ansehen</a><a class="button secondary" href="#preise">Preise ansehen</a></div><div class="trust"><div><strong>GitHub → Vercel</strong><span>Code und Deploy</span></div><div><strong>Neon / Supabase</strong><span>Backend je Projekt</span></div><div><strong>Stripe + Credits</strong><span>Billing-Grenze</span></div></div></div><aside class="console" aria-label="Beispiel eines laufenden BYB-Auftrags"><div class="console-head"><span class="mono">AUFTRAG 8D2F</span><span class="status"><i class="dot"></i> läuft</span></div><div class="console-body"><div class="auftrag"><span class="caps">Ziel</span><p>Baue das Produkt, richte Backend und Payments ein und veröffentliche die geprüfte Fassung.</p></div><div class="activity"><i class="mark done"></i><div><strong>GITHUB / REPO</strong><span class="stamp">BELEGT</span><p>Arbeitsbranch erstellt und Änderungen geprüft.</p><small class="mono">20:41:12 · Aktion a7f3</small></div></div><div class="activity"><i class="mark done"></i><div><strong>NEON / RLS</strong><span class="stamp">BELEGT</span><p>Mandantentrennung und Rollen geprüft.</p><small class="mono">20:44:09 · Aktion b091</small></div></div><div class="activity"><i class="mark"></i><div><strong>VERCEL / PREVIEW</strong><p>Vorschau wird aus dem geprüften Stand erzeugt.</p><small class="mono">nächster Schritt</small></div></div></div></aside></div></section>
 
@@ -48,7 +48,7 @@
   const show=(text)=>{toast.textContent=text;toast.classList.add('show');setTimeout(()=>toast.classList.remove('show'),5000)};
   document.querySelectorAll('.checkout').forEach((button)=>button.addEventListener('click',async()=>{
     const token=localStorage.getItem('byb_access_token');
-    if(!token){show('Die Live-Vorschau ist sichtbar. Für einen echten Checkout braucht diese Browser-Session zuerst eine Neon-Auth-Anmeldung.');return}
+    if(!token){location.href='/login.html';return}
     button.disabled=true;
     try{
       const body=button.dataset.topup?{art:'topup'}:{art:'abo',planKey:button.dataset.plan};
