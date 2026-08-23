@@ -204,5 +204,5 @@ Vor einem öffentlichen Nutzerlaunch zusätzlich:
 - dauerhafter Cloud-Worker mit diesen Produktcredentials
 - echte isolierte Sandbox-Laufzeit für dynamische Debug-/Security-Angriffe
 
-Bis eine isolierte Sandbox existiert, wird nicht behauptet, dynamische
-Angriffstests seien gelaufen oder BYB sei „sicher“.
+Bis eine isolierte Sandbox existiert, werden dynamische Angriffstests nicht als
+durchgeführt ausgewiesen.
