@@ -7,9 +7,6 @@ on:
         description: 'Zum Secret-Sync + Preview-Deploy "deploy" eintippen.'
         required: true
         default: "trocken"
-  pull_request:
-    paths:
-      - .github/workflows/vercel-preview.yml
 
 permissions:
   contents: read
@@ -23,11 +20,6 @@ env:
 
 jobs:
   runtime-sync:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-       github.head_ref == 'm13-live-runtime-sync' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +60,7 @@ jobs:
           fi
 
       - name: Neon Runtime-Konfiguration ableiten
-        if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
+        if: inputs.deploy == 'deploy'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
@@ -97,7 +89,7 @@ jobs:
           echo "Neon Runtime-Konfiguration aufgelöst."
 
       - name: Vercel-Domain in Neon Auth freigeben
-        if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
+        if: inputs.deploy == 'deploy'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
@@ -115,11 +107,11 @@ jobs:
           fi
 
       - name: Trockenlauf
-        if: github.event_name == 'workflow_dispatch' && inputs.deploy != 'deploy'
+        if: inputs.deploy != 'deploy'
         run: echo 'Kein Vercel-Write. Für Sync + Preview-Deploy mit "deploy" starten.'
 
       - name: Runtime-Secrets nach Vercel synchronisieren
-        if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
+        if: inputs.deploy == 'deploy'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
@@ -159,11 +151,11 @@ jobs:
           sync_secret NVIDIA_BASE_URL "$NVIDIA_BASE_URL"
 
       - name: Vercel Preview aus Git-Head deployen
-        if: github.event_name == 'pull_request' || inputs.deploy == 'deploy'
+        if: inputs.deploy == 'deploy'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_REF: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           payload="$(jq -n \
