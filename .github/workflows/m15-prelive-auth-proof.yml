@@ -1,9 +1,11 @@
-name: M1.5 Pre-Live Auth-Proof Einmalig
+name: Pre-Live Auth-Proof Manuell
+
+# Kontrollierter Owner-Pre-Live-Proof gegen die stabile BYB-Systemdomain.
+# Bewusst nur manuell: der Lauf registriert kurzzeitig einen Testnutzer und
+# erzeugt vier unbezahlte Live-Checkout-Sessions. Der Testnutzer wird im
+# finally-Cleanup wieder aus Neon Auth entfernt.
 
 on:
-  pull_request:
-    paths:
-      - .github/workflows/m15-prelive-auth-proof.yml
   workflow_dispatch:
 
 permissions:
