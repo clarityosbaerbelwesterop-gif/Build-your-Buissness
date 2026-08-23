@@ -117,7 +117,7 @@ Für genau einen kontrollierten Nachweis gab es vorübergehend einen auf PR #15
 und denselben Repository-Branch begrenzten `pull_request`-Trigger. Er wird vor
 dem Merge nicht im finalen Workflow behalten.
 
-Erster Versuch: sicher vor Vercel-Writes abgebrochen, weil Neon wegen mehrerer
+Erster Versuch: noch vor Vercel-Writes abgebrochen, weil Neon wegen mehrerer
 Rollen eine explizite DB-Rolle verlangte.
 
 Zweiter Versuch: Neon-Konfiguration und Auth-Domain erfolgreich; Vercel-CLI-
