@@ -11,28 +11,29 @@
     *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--ink);color:var(--white);font-family:Inter,system-ui,-apple-system,sans-serif}a{color:inherit}.wrap{width:min(var(--max),calc(100% - 28px));margin:auto}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.caps{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--stahl)}
     header{border-bottom:1px solid var(--line);background:#0D1620;position:sticky;top:0;z-index:5}nav{min-height:68px;display:flex;align-items:center;justify-content:space-between;gap:18px}.brand{font-size:20px;font-weight:800;text-decoration:none}.brand span{color:var(--stahl);font-weight:500}.navlinks{display:flex;gap:18px;align-items:center;font-size:13px;color:#BAC4D0}.navlinks a{text-decoration:none}.button{border:1px solid #40546C;background:transparent;color:var(--paper);min-height:42px;padding:0 14px;border-radius:3px;font:inherit;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center}.button.primary{background:var(--paper);color:var(--ink);border-color:var(--paper)}.button:disabled{opacity:.45;cursor:not-allowed}
     main{padding:30px 0 64px}.topline{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;margin-bottom:22px}.topline h1{font-size:clamp(30px,5vw,48px);margin:7px 0 8px;letter-spacing:-.04em}.muted{color:#AAB5C3;line-height:1.55}.credit{border:1px solid var(--line);padding:12px 15px;min-width:150px;text-align:right;background:#111D2A}.credit strong{display:block;font-size:18px}.credit a{font-size:12px;color:#B8C4D2}
-    .layout{display:grid;grid-template-columns:1.22fr .78fr;gap:16px}.panel{background:var(--blueprint);border:1px solid #304158;border-radius:4px;padding:24px}.panel h2{margin:5px 0 9px;font-size:24px;letter-spacing:-.03em}.chatbox textarea{width:100%;min-height:130px;resize:vertical;background:#101B28;border:1px solid #40546C;color:#fff;border-radius:3px;padding:14px;font:inherit;line-height:1.5;margin-top:16px}.chatbox textarea:focus{outline:2px solid var(--paper);outline-offset:2px}.chat-actions{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:12px}.hint{font-size:12px;color:#8F9CAB;max-width:480px}.blocked{border-left:2px solid var(--befund);padding:11px 13px;margin-top:18px;background:#201A1A;color:#D7C2BA;font-size:13px;line-height:1.45}
-    .activity{margin-top:16px}.empty{border:1px dashed #40546C;padding:24px;color:#9EABBA;background:#101B28}.empty strong{display:block;color:#DCE2E8;margin-bottom:5px}.connector-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.connector{border:1px solid #34485E;background:#111D2A;padding:15px;min-height:136px}.connector-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.connector h3{font-size:17px;margin:0}.state{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#A7B2BF}.state.ok{color:#8EC4A5}.state.warn{color:#E5A788}.connector p{font-size:12px;color:#99A7B6;line-height:1.45;margin:14px 0 0}.resource{margin-top:8px;color:#C7D0DB;font-size:12px}.section-gap{margin-top:16px}.accountline{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:17px;margin-top:18px;border-top:1px solid #304158}.accountline span{font-size:12px;color:#AAB5C3;overflow-wrap:anywhere}
+    .layout{display:grid;grid-template-columns:1.22fr .78fr;gap:16px}.panel{background:var(--blueprint);border:1px solid #304158;border-radius:4px;padding:24px}.panel h2{margin:5px 0 9px;font-size:24px;letter-spacing:-.03em}.chatbox textarea{width:100%;min-height:130px;resize:vertical;background:#101B28;border:1px solid #40546C;color:#fff;border-radius:3px;padding:14px;font:inherit;line-height:1.5;margin-top:16px}.chatbox textarea:focus{outline:2px solid var(--paper);outline-offset:2px}.chat-actions{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:12px}.hint{font-size:12px;color:#8F9CAB;max-width:480px}.notice{border-left:2px solid var(--siegel);padding:11px 13px;margin-top:18px;background:#14211C;color:#C7D9CE;font-size:13px;line-height:1.45}.notice.error{border-color:var(--befund);background:#201A1A;color:#D7C2BA}
+    .empty{border:1px dashed #40546C;padding:24px;color:#9EABBA;background:#101B28}.empty strong{display:block;color:#DCE2E8;margin-bottom:5px}.flow-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;border-bottom:1px solid #304158;padding-bottom:16px;margin-bottom:4px}.flow-head h3{margin:6px 0 0;font-size:18px}.flow-state{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#B8C4D2}.action-row{display:grid;grid-template-columns:14px 1fr;gap:12px;padding:16px 0;border-bottom:1px solid #304158}.action-row:last-child{border-bottom:0}.action-mark{width:10px;height:10px;border:2px solid #65778C;margin-top:5px}.action-mark.done{background:var(--siegel);border-color:var(--siegel)}.action-mark.running{border-color:#D5DCE4}.action-mark.failed{border-color:var(--befund);background:var(--befund)}.action-row strong{font-size:13px;letter-spacing:.03em}.action-row p{font-size:13px;line-height:1.45;color:#B5C0CC;margin:5px 0}.action-meta{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#8F9CAB}.event-list{border-top:1px solid #304158;margin-top:8px;padding-top:12px}.event{font-size:12px;color:#AAB5C3;padding:6px 0}.event time{color:#7F8D9C;margin-right:8px}
+    .connector-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.connector{border:1px solid #34485E;background:#111D2A;padding:15px;min-height:136px}.connector-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.connector h3{font-size:17px;margin:0}.state{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#A7B2BF}.state.ok{color:#8EC4A5}.state.warn{color:#E5A788}.connector p{font-size:12px;color:#99A7B6;line-height:1.45;margin:14px 0 0}.resource{margin-top:8px;color:#C7D0DB;font-size:12px}.section-gap{margin-top:16px}.accountline{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:17px;margin-top:18px;border-top:1px solid #304158}.accountline span{font-size:12px;color:#AAB5C3;overflow-wrap:anywhere}
     footer{border-top:1px solid var(--line);padding:28px 0 38px;color:var(--stahl);font-size:12px}.footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.footer nav{min-height:auto;display:flex;gap:14px;flex-wrap:wrap}.footer a{color:#AAB5C3}
-    @media(max-width:820px){.layout{grid-template-columns:1fr}.navlinks a:not(.account-link){display:none}.topline{flex-direction:column}.credit{text-align:left}.connector-grid{grid-template-columns:1fr}.chat-actions{align-items:flex-start;flex-direction:column}.button.primary{width:100%}}
+    @media(max-width:820px){.layout{grid-template-columns:1fr}.navlinks a:not(.account-link){display:none}.topline{flex-direction:column}.credit{text-align:left}.connector-grid{grid-template-columns:1fr}.chat-actions{align-items:flex-start;flex-direction:column}.button.primary{width:100%}.flow-head{flex-direction:column}}
   </style>
 </head>
 <body>
 <header><nav class="wrap"><a class="brand" href="/app.html">BYB <span>/ Leitstand</span></a><div class="navlinks"><a href="#connectoren">Connectoren</a><a href="#aktivitaet">Aktivität</a><a class="account-link" href="/billing.html">Abrechnung</a></div></nav></header>
 <main class="wrap">
-  <div class="topline"><div><span class="caps">Autonomer AI-Business-Operator</span><h1>Was soll BYB für dich tun?</h1><p class="muted">Beschreibe das Geschäftsziel. BYB verbindet die erlaubten Ressourcen, plant die Arbeit und zeigt jeden relevanten Schritt im Leitstand.</p></div><aside class="credit"><span class="caps">Credits</span><strong id="creditValue">—</strong><a href="/billing.html" id="billingLink">Abrechnung</a></aside></div>
+  <div class="topline"><div><span class="caps">Autonomer AI-Business-Operator</span><h1>Was soll BYB für dich tun?</h1><p class="muted">Beschreibe das Geschäftsziel. BYB erstellt daraus einen validierten Arbeitsplan und zeigt nur tatsächlich gespeicherte Zustände.</p></div><aside class="credit"><span class="caps">Credits</span><strong id="creditValue">—</strong><a href="/billing.html" id="billingLink">Abrechnung</a></aside></div>
   <div class="layout">
     <div>
       <section class="panel chatbox" aria-labelledby="zielTitel">
         <span class="caps">Chathub</span><h2 id="zielTitel">Ziel beschreiben</h2>
         <textarea id="ziel" maxlength="4000" placeholder="Zum Beispiel: Baue mir eine Landingpage für mein neues Angebot, richte Backend und Zahlung ein und bereite den Launch vor."></textarea>
-        <div class="chat-actions"><span class="hint">Die Ausführung wird freigeschaltet, sobald die erforderlichen Kernsysteme produktiv verbunden und der Chathub mit dem Worker gekoppelt sind.</span><button class="button primary" type="button" disabled>BYB starten</button></div>
-        <div class="blocked" id="executionBlock">Noch keine ausführbare Produktverbindung. Der Leitstand zeigt deshalb keinen erfundenen Auftrag und keine Testaktivitäten.</div>
+        <div class="chat-actions"><span class="hint">BYB kann den Plan sofort erstellen. Ausführungsschritte bleiben blockiert, solange dafür notwendige Connector-Ressourcen fehlen oder eine Freigabe erforderlich ist.</span><button class="button primary" id="startButton" type="button" disabled>Plan erstellen</button></div>
+        <div class="notice" id="chatStatus" role="status" aria-live="polite" hidden></div>
       </section>
 
       <section class="panel section-gap" id="aktivitaet" aria-labelledby="aktivitaetTitel">
         <span class="caps">Activity Log</span><h2 id="aktivitaetTitel">Aktivität</h2>
-        <div class="empty"><strong>Noch keine Aktivität.</strong>Wenn BYB echte Arbeit ausführt, erscheinen hier Zustand, Ergebnis, Credits und gegebenenfalls eine Freigabe. Demo-Aufträge werden nicht als reale Arbeit dargestellt.</div>
+        <div id="auftragView" aria-live="polite"><div class="empty"><strong>Noch kein Vorgang.</strong>Beschreibe oben dein Ziel. Erst ein tatsächlich gespeicherter BYB-Vorgang erscheint hier.</div></div>
       </section>
     </div>
 
@@ -61,6 +62,10 @@
   const billingLink=document.getElementById('billingLink');
   const accountEmail=document.getElementById('accountEmail');
   const logout=document.getElementById('logout');
+  const ziel=document.getElementById('ziel');
+  const startButton=document.getElementById('startButton');
+  const chatStatus=document.getElementById('chatStatus');
+  const auftragView=document.getElementById('auftragView');
   const readJson=async(response)=>{try{return await response.json()}catch{return {}}};
 
   async function authRequest(aktion,method='GET',body){
@@ -75,6 +80,12 @@
     const data=await readJson(response);
     if(typeof data.token!=='string'||data.token.length<20){localStorage.removeItem(TOKEN_KEY);return null}
     localStorage.setItem(TOKEN_KEY,data.token);return data.token;
+  }
+
+  function showStatus(text,error=false){
+    chatStatus.textContent=text;
+    chatStatus.hidden=false;
+    chatStatus.classList.toggle('error',error);
   }
 
   function renderConnectoren(verbindungen){
@@ -95,20 +106,66 @@
     });
   }
 
+  function statusText(value){return String(value||'').replaceAll('_',' ')}
+  function markKlasse(value){if(value==='erfolgreich'||value==='uebersprungen')return'done';if(value==='laeuft')return'running';if(value==='fehlgeschlagen')return'failed';return''}
+  function zeit(ms){try{return new Date(Number(ms)).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}catch{return''}}
+
+  function renderAuftrag(auftrag){
+    if(!auftrag||typeof auftrag!=='object'){auftragView.innerHTML='<div class="empty"><strong>Noch kein Vorgang.</strong>Beschreibe oben dein Ziel.</div>';return}
+    const root=document.createElement('div');
+    const head=document.createElement('div');head.className='flow-head';
+    const left=document.createElement('div');const cap=document.createElement('span');cap.className='caps';cap.textContent='Aktueller Plan';const h=document.createElement('h3');h.textContent=auftrag.ziel||'BYB-Vorgang';left.append(cap,h);
+    const state=document.createElement('div');state.className='flow-state';state.textContent=statusText(auftrag.zustand);
+    head.append(left,state);root.append(head);
+    const actions=Array.isArray(auftrag.aktionen)?auftrag.aktionen:[];
+    actions.forEach(aktion=>{
+      const row=document.createElement('div');row.className='action-row';
+      const mark=document.createElement('i');mark.className='action-mark '+markKlasse(aktion.zustand);
+      const body=document.createElement('div');const strong=document.createElement('strong');strong.textContent=aktion.titel||aktion.typ||'Aktion';const p=document.createElement('p');p.textContent=aktion.beschreibung||'';
+      const meta=document.createElement('div');meta.className='action-meta';
+      const status=document.createElement('span');status.textContent=statusText(aktion.zustand);
+      const credits=document.createElement('span');credits.textContent=String(aktion.credits_verbraucht||0)+' / '+String(aktion.credits_geschaetzt||0)+' Credits';
+      const verbindung=document.createElement('span');const ids=Array.isArray(aktion.verbindung_ids)?aktion.verbindung_ids:[];verbindung.textContent=ids.length?ids.length+' Verbindung(en)':'Connector fehlt/noch nicht nötig';
+      const freigabe=document.createElement('span');freigabe.textContent=aktion.freigabe?.klasse==='intern'?'intern':('Freigabe: '+statusText(aktion.freigabe?.status));
+      meta.append(status,credits,verbindung,freigabe);body.append(strong,p,meta);row.append(mark,body);root.append(row);
+    });
+    const events=Array.isArray(auftrag.ereignisse)?auftrag.ereignisse:[];
+    if(events.length){const list=document.createElement('div');list.className='event-list';events.slice(-8).forEach(e=>{const line=document.createElement('div');line.className='event';const t=document.createElement('time');t.textContent=zeit(e.zeitstempel);const text=document.createElement('span');text.textContent=e.klartext||'';line.append(t,text);list.append(line)});root.append(list)}
+    auftragView.replaceChildren(root);
+  }
+
+  async function auftragStarten(){
+    const text=ziel.value.trim();
+    if(text.length<10)return;
+    startButton.disabled=true;showStatus('BYB plant den Vorgang…');
+    try{
+      const token=await tokenAktualisieren();
+      if(token===null){location.replace('/login.html');return}
+      const response=await fetch('/api/auftraege',{method:'POST',headers:{authorization:'Bearer '+token,accept:'application/json','content-type':'application/json'},body:JSON.stringify({ziel:text})});
+      const data=await readJson(response);
+      if(!response.ok||!data.auftrag)throw new Error(data?.fehler||'PLANUNG');
+      renderAuftrag(data.auftrag);
+      showStatus('Plan gespeichert. BYB zeigt ab jetzt nur reale Zustandsänderungen.');
+    }catch{showStatus('Der Plan konnte nicht erstellt werden. Modellzugang oder Backend ist noch nicht verfügbar.',true)}finally{startButton.disabled=ziel.value.trim().length<10}
+  }
+
   async function laden(){
     const token=await tokenAktualisieren();
     if(token===null){location.replace('/login.html');return}
     const session=await readJson(await authRequest('sitzung'));
     accountEmail.textContent=session?.user?.email||session?.data?.user?.email||'Angemeldet';
     const headers={authorization:'Bearer '+token,accept:'application/json'};
-    const [billingResponse,connectorResponse]=await Promise.all([fetch('/api/billing',{headers}),fetch('/api/connectors',{headers})]);
-    const billing=await readJson(billingResponse);const connectors=await readJson(connectorResponse);
+    const [billingResponse,connectorResponse,auftragResponse]=await Promise.all([fetch('/api/billing',{headers}),fetch('/api/connectors',{headers}),fetch('/api/auftraege',{headers})]);
+    const billing=await readJson(billingResponse);const connectors=await readJson(connectorResponse);const auftraege=await readJson(auftragResponse);
     const stand=billing?.billing;
     if(stand===null||stand===undefined){credit.textContent='Kein Tarif';billingLink.textContent='Tarif wählen'}
     else{const saldo=Number(stand.saldo);credit.textContent=Number.isFinite(saldo)?String(saldo):'—';if(Number.isFinite(saldo)&&saldo<=0)billingLink.textContent='Credits aufladen'}
     renderConnectoren(Array.isArray(connectors?.verbindungen)?connectors.verbindungen:[]);
+    const liste=Array.isArray(auftraege?.auftraege)?auftraege.auftraege:[];if(liste[0])renderAuftrag(liste[0]);
   }
 
+  ziel.addEventListener('input',()=>{startButton.disabled=ziel.value.trim().length<10});
+  startButton.addEventListener('click',()=>void auftragStarten());
   logout.addEventListener('click',async()=>{await authRequest('abmelden','POST',{}).catch(()=>undefined);localStorage.removeItem(TOKEN_KEY);location.replace('/login.html')});
   void laden();
 })();
