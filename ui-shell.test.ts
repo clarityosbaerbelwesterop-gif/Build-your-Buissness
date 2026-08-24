@@ -17,7 +17,16 @@ describe("BYB Produktoberfläche", () => {
     expect(login).not.toContain("Checkout öffnen");
     expect(app).toContain("Was soll BYB für dich tun?");
     expect(app).toContain("Connector Hub");
-    expect(app).toContain("Noch keine Aktivität.");
+    expect(app).toContain("Noch kein Vorgang.");
+  });
+
+  it("sendet ein Nutzerziel an die echte Auftrags-API und zeigt den gespeicherten Plan", () => {
+    const app = lesen("app.html");
+
+    expect(app).toContain("fetch('/api/auftraege'");
+    expect(app).toContain("Plan erstellen");
+    expect(app).toContain("renderAuftrag(data.auftrag)");
+    expect(app).not.toContain("AUFTRAG 8D2F");
   });
 
   it("stellt Demo-Auftrag auf der Landingpage nicht als reale Aktivität dar", () => {
