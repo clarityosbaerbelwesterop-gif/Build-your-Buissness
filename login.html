@@ -1,165 +1,33 @@
 <!doctype html>
 <html lang="de">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>BYB — Anmeldung</title>
-  <meta name="description" content="Anmelden, BYB-Billing prüfen und einen Checkout starten.">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+  <title>BYB — Anmelden</title><meta name="description" content="Bei Build your Buissness anmelden oder ein Konto erstellen.">
   <style>
-    :root{--ink:#0F1720;--blueprint:#17263A;--paper:#E6E4DD;--stahl:#8894A3;--befund:#E4572E;--siegel:#3F7D5A;--line:#2A3A4F;--white:#F5F6F2}
-    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--ink);color:var(--white);font-family:Inter,system-ui,-apple-system,sans-serif}.wrap{width:min(980px,calc(100% - 28px));margin:auto;padding:34px 0 70px}.top{display:flex;justify-content:space-between;align-items:center;gap:20px;padding-bottom:28px;border-bottom:1px solid var(--line)}a{color:inherit}.brand{font-weight:800;font-size:21px;text-decoration:none}.brand span{color:var(--stahl);font-weight:500}.back{color:#B9C3CF;font-size:14px}.grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:18px;margin-top:28px}.card{background:var(--blueprint);border:1px solid #304158;padding:28px;border-radius:4px}.caps{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;color:var(--stahl)}h1,h2{margin:12px 0 10px;letter-spacing:-.035em;line-height:1.05}h1{font-size:42px}h2{font-size:27px}.muted{color:#AAB5C3;line-height:1.55}.tabs{display:flex;gap:8px;margin:24px 0 18px}.tabs button,.button{min-height:44px;border:1px solid var(--line);border-radius:3px;padding:0 16px;background:transparent;color:var(--paper);font:inherit;font-weight:700;cursor:pointer}.tabs button.active,.button.primary{background:var(--paper);color:var(--ink);border-color:var(--paper)}label{display:block;font-size:13px;color:#BAC4D0;margin:14px 0 7px}input{width:100%;min-height:46px;border:1px solid #40546C;border-radius:3px;background:#101B28;color:#fff;padding:10px 12px;font:inherit}input:focus{outline:2px solid #D8DCD5;outline-offset:2px}.button{width:100%;margin-top:18px}.message{min-height:24px;margin-top:14px;font-size:13px;color:#D8B7A9}.message.ok{color:#9CC7AC}.account{display:none}.account.show{display:block}.status{display:flex;align-items:center;gap:8px;margin:12px 0 22px}.dot{width:9px;height:9px;border-radius:50%;background:var(--siegel)}.billing{border:1px solid var(--line);padding:16px;margin:16px 0;background:#101B28}.billing pre{white-space:pre-wrap;margin:8px 0 0;color:#C5CED8;font-size:12px}.plans{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px}.plan{border:1px solid var(--line);padding:15px;background:#121D2A}.plan strong{display:block}.plan span{display:block;color:#9EABBA;font-size:12px;margin:6px 0 10px}.plan .button{margin:0;min-height:40px}.logout{margin-top:18px}.note{font-size:12px;color:var(--stahl);margin-top:16px;line-height:1.5}@media(max-width:760px){.grid{grid-template-columns:1fr}.plans{grid-template-columns:1fr}h1{font-size:34px}.wrap{padding-top:20px}.top{align-items:flex-start;flex-direction:column}}
+    :root{--ink:#0F1720;--blueprint:#17263A;--paper:#E6E4DD;--stahl:#8894A3;--line:#2A3A4F;--white:#F5F6F2;--max:980px}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--ink);color:var(--white);font-family:Inter,system-ui,-apple-system,sans-serif}a{color:inherit}.wrap{width:min(var(--max),calc(100% - 28px));margin:auto}.top{min-height:72px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line)}.brand{font-weight:800;font-size:20px;text-decoration:none}.brand span{color:var(--stahl);font-weight:500}.back{font-size:13px;color:#B9C3CF}.shell{display:grid;grid-template-columns:1fr .82fr;gap:18px;padding:48px 0 70px}.intro,.card{border:1px solid #304158;background:var(--blueprint);padding:30px}.intro{background:transparent;border-color:var(--line)}.caps{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--stahl)}h1{font-size:clamp(38px,6vw,58px);line-height:1.02;letter-spacing:-.045em;margin:13px 0 18px}.muted{color:#AAB5C3;line-height:1.6}.flow{margin-top:28px;border-top:1px solid var(--line)}.flow div{padding:13px 0;border-bottom:1px solid var(--line);color:#B8C3CF;font-size:13px}.tabs{display:flex;gap:8px;margin:22px 0 16px}.tabs button,.button{min-height:44px;border:1px solid #40546C;border-radius:3px;padding:0 15px;background:transparent;color:var(--paper);font:inherit;font-weight:700;cursor:pointer}.tabs button.active,.button.primary{background:var(--paper);color:var(--ink);border-color:var(--paper)}label{display:block;font-size:13px;color:#BAC4D0;margin:13px 0 7px}input{width:100%;min-height:46px;border:1px solid #40546C;border-radius:3px;background:#101B28;color:#fff;padding:10px 12px;font:inherit}.button.primary{width:100%;margin-top:18px}.message{min-height:24px;margin-top:13px;font-size:13px;color:#D8B7A9}.message.ok{color:#9CC7AC}.legal-note{font-size:11px;color:#8795A5;line-height:1.5;margin-top:17px}.legal-note a{color:#AEB9C6}footer{border-top:1px solid var(--line);padding:28px 0 38px;color:var(--stahl);font-size:12px}.footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.footer nav{display:flex;gap:14px;flex-wrap:wrap}.footer a{color:#AAB5C3}@media(max-width:760px){.shell{grid-template-columns:1fr;padding-top:24px}.intro{padding:22px}.card{padding:24px}}
   </style>
 </head>
 <body>
-  <main class="wrap">
-    <div class="top"><a class="brand" href="/">BYB <span>/ Build your Buissness</span></a><a class="back" href="/">← Zur Startseite</a></div>
-    <div class="grid">
-      <section class="card" id="authCard">
-        <span class="caps">NEON AUTH · FIRST PARTY</span>
-        <h1>Dein BYB-Zugang.</h1>
-        <p class="muted">Anmeldung und Registrierung laufen über die BYB-Domain. Das kurzlebige JWT wird nur für deine geschützten BYB-API-Aufrufe verwendet.</p>
-        <div class="tabs"><button id="loginTab" class="active" type="button">Anmelden</button><button id="signupTab" type="button">Registrieren</button></div>
-        <form id="authForm">
-          <div id="nameGroup" hidden><label for="name">Name</label><input id="name" name="name" autocomplete="name" maxlength="120"></div>
-          <label for="email">E-Mail</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="254">
-          <label for="password">Passwort</label><input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required maxlength="200">
-          <button class="button primary" id="submit" type="submit">Anmelden</button>
-          <div class="message" id="authMessage" role="status" aria-live="polite"></div>
-        </form>
-      </section>
-
-      <section class="card">
-        <span class="caps">LIVE-TEST · BILLING</span>
-        <h2>Account und Checkout.</h2>
-        <p class="muted" id="lockedText">Nach der Anmeldung kannst du deinen RLS-geschützten Billing-Stand lesen und jeden BYB-Checkout einzeln öffnen.</p>
-        <div class="account" id="account">
-          <div class="status"><i class="dot"></i><strong id="accountEmail">Angemeldet</strong></div>
-          <div class="billing"><span class="caps">BILLING / CREDIT LEDGER</span><pre id="billingState">wird geladen…</pre></div>
-          <div class="plans">
-            <div class="plan"><strong>Starter</strong><span>20 € / Monat · 100 Credits</span><button class="button checkout" data-plan="starter">Checkout öffnen</button></div>
-            <div class="plan"><strong>Pro</strong><span>200 € / Monat · 750 Credits</span><button class="button checkout" data-plan="pro">Checkout öffnen</button></div>
-            <div class="plan"><strong>Scale</strong><span>250 € / Monat · 1.500 Credits</span><button class="button checkout" data-plan="scale">Checkout öffnen</button></div>
-            <div class="plan"><strong>Top-up</strong><span>25 € einmalig · 100 Credits</span><button class="button checkout" data-topup="true">Checkout öffnen</button></div>
-          </div>
-          <div class="message" id="billingMessage" role="status" aria-live="polite"></div>
-          <button class="button logout" id="logout" type="button">Abmelden</button>
-          <p class="note">Ein Checkout wird erst bei einer von dir bestätigten Stripe-Zahlung kostenpflichtig. Diese Seite löst selbst keine Zahlung aus.</p>
-        </div>
-      </section>
-    </div>
-  </main>
+<div class="wrap"><div class="top"><a class="brand" href="/">BYB <span>/ Build your Buissness</span></a><a class="back" href="/">← Startseite</a></div>
+<main class="shell">
+  <section class="intro"><span class="caps">Dein BYB-Zugang</span><h1>Einloggen. Ziel beschreiben. BYB arbeiten lassen.</h1><p class="muted">Nach der Anmeldung landest du im Leitstand — nicht im Checkout. Dort siehst du Chathub, Connectoren, Aktivität und deinen Credit-Stand.</p><div class="flow"><div>01 · Systeme verbinden</div><div>02 · Ziel beschreiben</div><div>03 · Arbeit und Freigaben verfolgen</div></div></section>
+  <section class="card" aria-labelledby="authTitel"><span class="caps">Anmeldung</span><h2 id="authTitel">BYB Account</h2><div class="tabs"><button id="loginTab" class="active" type="button">Anmelden</button><button id="signupTab" type="button">Registrieren</button></div>
+    <form id="authForm"><div id="nameGroup" hidden><label for="name">Name</label><input id="name" name="name" autocomplete="name" maxlength="120"></div><label for="email">E-Mail</label><input id="email" name="email" type="email" autocomplete="email" required maxlength="254"><label for="password">Passwort</label><input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required maxlength="200"><button class="button primary" id="submit" type="submit">Anmelden</button><div class="message" id="authMessage" role="status" aria-live="polite"></div></form>
+    <p class="legal-note">Mit der Nutzung gelten die <a href="/agb.html">AGB</a> und <a href="/eula.html">Nutzungsbedingungen</a>. Hinweise zur Verarbeitung personenbezogener Daten stehen unter <a href="/datenschutz.html">Datenschutz</a>.</p>
+  </section>
+</main></div>
+<footer><div class="wrap footer"><span>© ClarityCompassAi · BYB</span><nav aria-label="Rechtliches"><a href="/impressum.html">Impressum</a><a href="/datenschutz.html">Datenschutz</a><a href="/agb.html">AGB</a><a href="/eula.html">EULA</a></nav></div></footer>
 <script>
 (() => {
   'use strict';
-  const TOKEN_KEY='byb_access_token';
-  const authCard=document.getElementById('authCard');
-  const form=document.getElementById('authForm');
-  const loginTab=document.getElementById('loginTab');
-  const signupTab=document.getElementById('signupTab');
-  const nameGroup=document.getElementById('nameGroup');
-  const nameInput=document.getElementById('name');
-  const emailInput=document.getElementById('email');
-  const passwordInput=document.getElementById('password');
-  const submit=document.getElementById('submit');
-  const authMessage=document.getElementById('authMessage');
-  const account=document.getElementById('account');
-  const accountEmail=document.getElementById('accountEmail');
-  const lockedText=document.getElementById('lockedText');
-  const billingState=document.getElementById('billingState');
-  const billingMessage=document.getElementById('billingMessage');
-  const logout=document.getElementById('logout');
-  let mode='anmelden';
-
-  const text=async(response)=>{try{return await response.json()}catch{return {}}};
-  const message=(element,value,ok=false)=>{element.textContent=value;element.classList.toggle('ok',ok)};
-
-  function setMode(next){
-    mode=next;
-    const signup=mode==='registrieren';
-    loginTab.classList.toggle('active',!signup);
-    signupTab.classList.toggle('active',signup);
-    nameGroup.hidden=!signup;
-    nameInput.required=signup;
-    passwordInput.autocomplete=signup?'new-password':'current-password';
-    submit.textContent=signup?'Konto erstellen':'Anmelden';
-    message(authMessage,'');
-  }
-
-  async function authRequest(aktion,method='GET',body){
-    const init={method,credentials:'same-origin',headers:{accept:'application/json'}};
-    if(body!==undefined){init.headers['content-type']='application/json';init.body=JSON.stringify(body)}
-    return fetch('/api/auth?aktion='+encodeURIComponent(aktion),init);
-  }
-
-  async function tokenAktualisieren(){
-    const response=await authRequest('token');
-    if(!response.ok){localStorage.removeItem(TOKEN_KEY);return null}
-    const data=await text(response);
-    if(typeof data.token!=='string'||data.token.length<20){localStorage.removeItem(TOKEN_KEY);return null}
-    localStorage.setItem(TOKEN_KEY,data.token);
-    return data.token;
-  }
-
-  async function sitzungLaden(){
-    const token=await tokenAktualisieren();
-    if(token===null){account.classList.remove('show');lockedText.hidden=false;authCard.hidden=false;return}
-    const sessionResponse=await authRequest('sitzung');
-    const session=await text(sessionResponse);
-    const email=session?.user?.email||session?.data?.user?.email||emailInput.value||'Angemeldet';
-    accountEmail.textContent=email;
-    account.classList.add('show');
-    lockedText.hidden=true;
-    authCard.hidden=true;
-    await billingLaden(token);
-  }
-
-  async function billingLaden(token){
-    billingState.textContent='wird geladen…';
-    const response=await fetch('/api/billing',{headers:{authorization:'Bearer '+token,accept:'application/json'}});
-    const data=await text(response);
-    if(!response.ok){billingState.textContent='Billing konnte nicht gelesen werden.';message(billingMessage,'Die Session wird erneuert.');return}
-    billingState.textContent=JSON.stringify(data.billing,null,2);
-    message(billingMessage,'Billing-RLS erfolgreich gelesen.',true);
-  }
-
-  async function checkoutStarten(button){
-    button.disabled=true;message(billingMessage,'Checkout wird vorbereitet…');
-    try{
-      const token=await tokenAktualisieren();
-      if(token===null)throw new Error('SESSION');
-      const body=button.dataset.topup?{art:'topup'}:{art:'abo',planKey:button.dataset.plan};
-      const response=await fetch('/api/checkout',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(body)});
-      const data=await text(response);
-      if(!response.ok||typeof data.checkoutUrl!=='string')throw new Error('CHECKOUT');
-      location.href=data.checkoutUrl;
-    }catch{message(billingMessage,'Checkout konnte nicht geöffnet werden. Bitte Session oder Katalog prüfen.')}finally{button.disabled=false}
-  }
-
-  loginTab.addEventListener('click',()=>setMode('anmelden'));
-  signupTab.addEventListener('click',()=>setMode('registrieren'));
-  form.addEventListener('submit',async(event)=>{
-    event.preventDefault();submit.disabled=true;message(authMessage,'wird geprüft…');
-    const email=emailInput.value.trim();
-    const password=passwordInput.value;
-    const body=mode==='registrieren'?{name:nameInput.value.trim()||email.split('@')[0],email,password}:{email,password};
-    try{
-      const response=await authRequest(mode,'POST',body);
-      const data=await text(response);
-      if(!response.ok){const detail=data?.message||data?.error||data?.fehler;throw new Error(typeof detail==='string'?detail:'AUTH')}
-      message(authMessage,mode==='registrieren'?'Konto erstellt.':'Anmeldung erfolgreich.',true);
-      passwordInput.value='';
-      await sitzungLaden();
-    }catch(error){message(authMessage,error instanceof Error&&error.message!=='AUTH'?error.message:'Anmeldung konnte nicht abgeschlossen werden.')}finally{submit.disabled=false}
-  });
-  logout.addEventListener('click',async()=>{
-    await authRequest('abmelden','POST',{}).catch(()=>undefined);
-    localStorage.removeItem(TOKEN_KEY);
-    account.classList.remove('show');lockedText.hidden=false;authCard.hidden=false;billingState.textContent='wird geladen…';message(billingMessage,'');
-  });
-  document.querySelectorAll('.checkout').forEach((button)=>button.addEventListener('click',()=>checkoutStarten(button)));
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')void sitzungLaden()});
-  void sitzungLaden();
+  const TOKEN_KEY='byb_access_token';const form=document.getElementById('authForm');const loginTab=document.getElementById('loginTab');const signupTab=document.getElementById('signupTab');const nameGroup=document.getElementById('nameGroup');const nameInput=document.getElementById('name');const emailInput=document.getElementById('email');const passwordInput=document.getElementById('password');const submit=document.getElementById('submit');const authMessage=document.getElementById('authMessage');let mode='anmelden';
+  const readJson=async(response)=>{try{return await response.json()}catch{return {}}};const message=(value,ok=false)=>{authMessage.textContent=value;authMessage.classList.toggle('ok',ok)};
+  function setMode(next){mode=next;const signup=mode==='registrieren';loginTab.classList.toggle('active',!signup);signupTab.classList.toggle('active',signup);nameGroup.hidden=!signup;nameInput.required=signup;passwordInput.autocomplete=signup?'new-password':'current-password';submit.textContent=signup?'Konto erstellen':'Anmelden';message('')}
+  async function authRequest(aktion,method='GET',body){const init={method,credentials:'same-origin',headers:{accept:'application/json'}};if(body!==undefined){init.headers['content-type']='application/json';init.body=JSON.stringify(body)}return fetch('/api/auth?aktion='+encodeURIComponent(aktion),init)}
+  async function tokenAktualisieren(){const response=await authRequest('token');if(!response.ok){localStorage.removeItem(TOKEN_KEY);return false}const data=await readJson(response);if(typeof data.token!=='string'||data.token.length<20){localStorage.removeItem(TOKEN_KEY);return false}localStorage.setItem(TOKEN_KEY,data.token);return true}
+  loginTab.addEventListener('click',()=>setMode('anmelden'));signupTab.addEventListener('click',()=>setMode('registrieren'));
+  form.addEventListener('submit',async(event)=>{event.preventDefault();submit.disabled=true;message('wird geprüft…');const email=emailInput.value.trim();const password=passwordInput.value;const body=mode==='registrieren'?{name:nameInput.value.trim()||email.split('@')[0],email,password}:{email,password};try{const response=await authRequest(mode,'POST',body);const data=await readJson(response);if(!response.ok){const detail=data?.message||data?.error||data?.fehler;throw new Error(typeof detail==='string'?detail:'AUTH')}if(!await tokenAktualisieren())throw new Error('SESSION');message(mode==='registrieren'?'Konto erstellt.':'Anmeldung erfolgreich.',true);location.replace('/app.html')}catch(error){message(error instanceof Error&&!['AUTH','SESSION'].includes(error.message)?error.message:'Anmeldung konnte nicht abgeschlossen werden.')}finally{submit.disabled=false}});
+  tokenAktualisieren().then(ok=>{if(ok)location.replace('/app.html')}).catch(()=>undefined);
 })();
 </script>
 </body>

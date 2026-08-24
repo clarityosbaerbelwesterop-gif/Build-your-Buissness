@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+  <title>BYB — Abrechnung</title>
+  <meta name="description" content="BYB Tarif, Credits und Abrechnung verwalten.">
+  <style>
+    :root{--ink:#0F1720;--blueprint:#17263A;--paper:#E6E4DD;--stahl:#8894A3;--befund:#E4572E;--siegel:#3F7D5A;--line:#2A3A4F;--white:#F5F6F2;--max:980px}*{box-sizing:border-box}body{margin:0;background:var(--ink);color:var(--white);font-family:Inter,system-ui,-apple-system,sans-serif}a{color:inherit}.wrap{width:min(var(--max),calc(100% - 28px));margin:auto}.caps{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.13em;text-transform:uppercase;color:var(--stahl)}header{border-bottom:1px solid var(--line)}nav{min-height:68px;display:flex;align-items:center;justify-content:space-between}.brand{font-weight:800;text-decoration:none;font-size:20px}.brand span{font-weight:500;color:var(--stahl)}.back{color:#B9C3CF;font-size:13px}main{padding:40px 0 70px}h1{font-size:clamp(34px,6vw,52px);margin:8px 0 10px;letter-spacing:-.04em}.muted{color:#AAB5C3;line-height:1.55}.summary{margin-top:24px;background:var(--blueprint);border:1px solid #304158;padding:22px}.summary strong{font-size:22px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}.plan{border:1px solid #34485E;background:#111D2A;padding:20px;display:flex;flex-direction:column;min-height:245px}.plan h2{margin:0;font-size:22px}.price{font-size:28px;font-weight:800;margin:18px 0 3px}.plan p{color:#AAB5C3;font-size:13px;line-height:1.5}.button{margin-top:auto;min-height:43px;border:1px solid var(--paper);background:var(--paper);color:var(--ink);font:inherit;font-weight:800;border-radius:3px;cursor:pointer;padding:0 12px}.message{margin-top:14px;min-height:22px;color:#DAB09E;font-size:13px}.topup{display:none;margin-top:18px;border-left:2px solid var(--befund);background:#211B1A;padding:20px}.topup.show{display:block}.topup .button{margin-top:10px}footer{border-top:1px solid var(--line);padding:28px 0 38px;color:var(--stahl);font-size:12px}.footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.footer nav{min-height:auto;display:flex;gap:14px;flex-wrap:wrap}.footer a{color:#AAB5C3}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header><nav class="wrap"><a class="brand" href="/app.html">BYB <span>/ Abrechnung</span></a><a class="back" href="/app.html">← Zum Leitstand</a></nav></header>
+<main class="wrap">
+  <span class="caps">Tarif und Credits</span><h1>Abrechnung</h1><p class="muted">Abrechnung ist eine Nebenfunktion von BYB. Dein eigentlicher Arbeitsplatz bleibt der Leitstand.</p>
+  <section class="summary" aria-live="polite"><span class="caps">Aktueller Stand</span><p id="billingState">wird geladen…</p></section>
+  <section id="plans" hidden><div class="grid">
+    <article class="plan"><h2>Starter</h2><div class="price">20 € <small>/ Monat</small></div><p>100 Credits pro Monat für den Einstieg.</p><button class="button checkout" data-plan="starter">Starter wählen</button></article>
+    <article class="plan"><h2>Pro</h2><div class="price">200 € <small>/ Monat</small></div><p>750 Credits pro Monat für größere autonome Workflows.</p><button class="button checkout" data-plan="pro">Pro wählen</button></article>
+    <article class="plan"><h2>Scale</h2><div class="price">250 € <small>/ Monat</small></div><p>1.500 Credits pro Monat für umfangreichere Nutzung.</p><button class="button checkout" data-plan="scale">Scale wählen</button></article>
+  </section>
+  <section class="topup" id="topup"><strong>Deine Credits sind aufgebraucht.</strong><p class="muted">Du kannst 100 zusätzliche Credits für 25 € einmalig aufladen.</p><button class="button checkout" data-topup="true">100 Credits aufladen</button></section>
+  <div class="message" id="message" role="status" aria-live="polite"></div>
+</main>
+<footer><div class="wrap footer"><span>© ClarityCompassAi · BYB</span><nav aria-label="Rechtliches"><a href="/impressum.html">Impressum</a><a href="/datenschutz.html">Datenschutz</a><a href="/agb.html">AGB</a><a href="/eula.html">EULA</a></nav></div></footer>
+<script>
+(() => {
+  'use strict';
+  const TOKEN_KEY='byb_access_token';const state=document.getElementById('billingState');const plans=document.getElementById('plans');const topup=document.getElementById('topup');const message=document.getElementById('message');
+  const readJson=async(response)=>{try{return await response.json()}catch{return {}}};
+  async function authRequest(aktion){return fetch('/api/auth?aktion='+encodeURIComponent(aktion),{credentials:'same-origin',headers:{accept:'application/json'}})}
+  async function tokenAktualisieren(){const response=await authRequest('token');if(!response.ok){localStorage.removeItem(TOKEN_KEY);return null}const data=await readJson(response);if(typeof data.token!=='string'||data.token.length<20)return null;localStorage.setItem(TOKEN_KEY,data.token);return data.token}
+  async function laden(){const token=await tokenAktualisieren();if(token===null){location.replace('/login.html');return}const response=await fetch('/api/billing',{headers:{authorization:'Bearer '+token,accept:'application/json'}});const data=await readJson(response);if(!response.ok){state.textContent='Abrechnung konnte nicht geladen werden.';return}const billing=data.billing;if(billing===null){state.textContent='Noch kein aktiver Tarif. Wähle einen Tarif, um BYB-Credits zu erhalten.';plans.hidden=false;return}const saldo=Number(billing.saldo);const name=typeof billing.plan_key==='string'?billing.plan_key.toUpperCase():'Tarif';state.textContent=name+' · '+(Number.isFinite(saldo)?saldo:'—')+' Credits verfügbar.';if(Number.isFinite(saldo)&&saldo<=0)topup.classList.add('show')}
+  async function checkout(button){button.disabled=true;message.textContent='Checkout wird vorbereitet…';try{const token=await tokenAktualisieren();if(token===null)throw new Error('SESSION');const body=button.dataset.topup?{art:'topup'}:{art:'abo',planKey:button.dataset.plan};const response=await fetch('/api/checkout',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify(body)});const data=await readJson(response);if(!response.ok||typeof data.checkoutUrl!=='string')throw new Error('CHECKOUT');location.href=data.checkoutUrl}catch{message.textContent='Checkout konnte nicht geöffnet werden.'}finally{button.disabled=false}}
+  document.querySelectorAll('.checkout').forEach(button=>button.addEventListener('click',()=>checkout(button)));void laden();
+})();
+</script>
+</body>
+</html>
