@@ -52,7 +52,7 @@ describe("Control-Plane Planer", () => {
       {
         idErzeugen: () => "fest",
         jetzt: () => 1_000,
-        fragenImpl: async () => ({
+        fragenImpl: () => Promise.resolve({
           text: JSON.stringify({
             aktionen: [
               {
@@ -106,7 +106,7 @@ describe("Control-Plane Planer", () => {
         100,
         [],
         {
-          fragenImpl: async () => ({
+          fragenImpl: () => Promise.resolve({
             text: JSON.stringify({
               aktionen: [
                 {
