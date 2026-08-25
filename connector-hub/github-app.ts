@@ -1,4 +1,6 @@
-import { importPKCS8, SignJWT } from "jose";
+import { createPrivateKey } from "node:crypto";
+
+import { SignJWT } from "jose";
 import { z } from "zod";
 
 import { pflicht } from "../config/umgebung.js";
@@ -73,7 +75,7 @@ export function githubAppKonfigurationAusUmgebung(
   const privateKey = pflicht("GITHUB_APP_PRIVATE_KEY", "GitHub App signieren", umgebung)
     .replace(/\\n/g, "\n");
   if (!privateKey.includes("BEGIN RSA PRIVATE KEY") && !privateKey.includes("BEGIN PRIVATE KEY")) {
-    throw new Error("GITHUB_APP_PRIVATE_KEY ist kein PEM-Schlüssel.");
+    throw new Error("GITHUB_APP_PRIVATE_KEY ist kein unterstützter PEM-Schlüssel.");
   }
   return {
     appId,
@@ -159,7 +161,13 @@ export async function githubAppJwt(
   konfiguration: Pick<GitHubAppKonfiguration, "clientId" | "privateKeyPem">,
   jetztMs = Date.now(),
 ): Promise<string> {
-  const schluessel = await importPKCS8(konfiguration.privateKeyPem, "RS256");
+  /*
+   * GitHub liefert App-Schlüssel je nach Erzeugungs-/Konvertierungsweg als
+   * PKCS#1 oder PKCS#8. Node `createPrivateKey` versteht beide PEM-Formen;
+   * `jose.importPKCS8` dagegen nur PKCS#8. Die Konfigurationsgrenze und die
+   * Signaturgrenze müssen deshalb dieselben gültigen GitHub-Keyformen tragen.
+   */
+  const schluessel = createPrivateKey(konfiguration.privateKeyPem);
   const jetzt = Math.floor(jetztMs / 1000);
   return new SignJWT({})
     .setProtectedHeader({ alg: "RS256", typ: "JWT" })
