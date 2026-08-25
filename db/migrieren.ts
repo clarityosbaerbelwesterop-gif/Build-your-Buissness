@@ -22,6 +22,7 @@ const ERLAUBTE_MIGRATIONEN = new Set([
   "003_control_plane.sql",
   "004_connector_hub.sql",
   "005_billing_credits.sql",
+  "006_connector_oauth.sql",
 ]);
 
 function migrationsdatei(): string {
