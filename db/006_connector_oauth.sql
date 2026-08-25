@@ -22,6 +22,8 @@ end
 $$;
 
 grant byb_connector to current_user;
+grant usage on schema public, auth to byb_connector;
+grant execute on function auth.nutzer_kennung() to byb_connector;
 
 create table if not exists connector_oauth_sessions (
   state_hash             text primary key check (length(state_hash) = 64),
