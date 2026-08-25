@@ -5,6 +5,11 @@ import { Client } from "pg";
 
 import { pflicht } from "../config/umgebung.js";
 import {
+  oauthSessionAutorisieren,
+  oauthSessionStarten,
+  oauthSessionVerbrauchen,
+} from "../connector-hub/oauth-session.js";
+import {
   projektWerkzeugeFuerWorkerLaden,
   projektWerkzeugeLaden,
   projektWerkzeugeSpeichern,
@@ -36,6 +41,10 @@ const MIGRATION_003 = readFileSync(
 );
 const MIGRATION_004 = readFileSync(
   fileURLToPath(new URL("./004_connector_hub.sql", import.meta.url)),
+  "utf8",
+);
+const MIGRATION_006 = readFileSync(
+  fileURLToPath(new URL("./006_connector_oauth.sql", import.meta.url)),
   "utf8",
 );
 
@@ -78,6 +87,7 @@ async function grundlageAnwenden(klient: Client): Promise<void> {
   await klient.query(MIGRATION_002);
   await klient.query(MIGRATION_003);
   await klient.query(MIGRATION_004);
+  await klient.query(MIGRATION_006);
 }
 
 const schluessel = pflicht("NEON_API_KEY", "einen Zweig für den Connector-Hub-Nachweis anlegen");
@@ -99,12 +109,16 @@ try {
   await klient.connect();
   await grundlageAnwenden(klient);
 
-  const geheimeSpalten = await klient.query<{ column_name: string }>(
-    `select column_name
+  const geheimeSpalten = await klient.query<{ table_name: string; column_name: string }>(
+    `select table_name, column_name
        from information_schema.columns
       where table_schema = 'public'
-        and table_name in ('connector_verbindungen', 'connector_projekt_werkzeuge')
-        and column_name ~* '(token|secret|api_key|refresh)'`,
+        and table_name in (
+          'connector_verbindungen',
+          'connector_projekt_werkzeuge',
+          'connector_oauth_sessions'
+        )
+        and column_name ~* '(token|secret|api_key|refresh|private_key)'`,
   );
   if (geheimeSpalten.rows.length !== 0) {
     throw new Error("Connector-Tabellen enthalten unerwartete Secret-Spalten.");
@@ -165,10 +179,64 @@ try {
     throw new Error("byb_worker konnte Connector-Konfiguration verändern.");
   }
 
+  const oauth = await oauthSessionStarten(db, identitaetA, "github", 5 * 60_000);
+  const oauthZeile = await klient.query<{ state_hash: string; nutzer_id: string }>(
+    "select state_hash, nutzer_id from connector_oauth_sessions",
+  );
+  if (
+    oauthZeile.rows.length !== 1
+    || oauthZeile.rows[0]?.state_hash === oauth.state
+    || oauthZeile.rows[0]?.state_hash.length !== 64
+    || oauthZeile.rows[0]?.nutzer_id !== identitaetA.nutzerId
+  ) {
+    throw new Error("OAuth-State wurde nicht ausschließlich gehasht und mandantengebunden gespeichert.");
+  }
+
+  let fremderMandantKonnteAutorisieren = false;
+  try {
+    await oauthSessionAutorisieren(db, identitaetB, oauth.state, [7]);
+    fremderMandantKonnteAutorisieren = true;
+  } catch {
+    fremderMandantKonnteAutorisieren = false;
+  }
+  if (fremderMandantKonnteAutorisieren) {
+    throw new Error("Ein fremder Mandant konnte eine OAuth-Sitzung übernehmen.");
+  }
+
+  const autorisiert = await oauthSessionAutorisieren(db, identitaetA, oauth.state, [7]);
+  if (autorisiert.phase !== "autorisiert" || autorisiert.erlaubteInstallationen[0] !== 7) {
+    throw new Error("OAuth-Sitzung wurde nicht mit der erlaubten Installation autorisiert.");
+  }
+
+  let falscheInstallationKonnteVerbrauchen = false;
+  try {
+    await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 8);
+    falscheInstallationKonnteVerbrauchen = true;
+  } catch {
+    falscheInstallationKonnteVerbrauchen = false;
+  }
+  if (falscheInstallationKonnteVerbrauchen) {
+    throw new Error("Nicht autorisierte Installation konnte OAuth-State verbrauchen.");
+  }
+
+  await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 7);
+  let stateKonnteDoppeltVerbrauchtWerden = false;
+  try {
+    await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 7);
+    stateKonnteDoppeltVerbrauchtWerden = true;
+  } catch {
+    stateKonnteDoppeltVerbrauchtWerden = false;
+  }
+  if (stateKonnteDoppeltVerbrauchtWerden) {
+    throw new Error("OAuth-State konnte mehr als einmal verbraucht werden.");
+  }
+
   console.error("Geprüft: Connector-Tabellen enthalten keine Token-/Secret-Spalten.");
   console.error("Geprüft: gleiche Connector-/Projekt-IDs bleiben zwischen zwei Mandanten getrennt.");
   console.error("Geprüft: Resource Picks werden gegen eigene verbundene Ressourcen aufgelöst.");
   console.error("Geprüft: byb_worker kann Resource Picks lesen, aber Connector-Daten nicht verändern.");
+  console.error("Geprüft: OAuth-State liegt nur als Hash vor und ist mandanten- sowie installationsgebunden.");
+  console.error("Geprüft: OAuth-State ist nach erfolgreichem Verbrauch nicht wiederverwendbar.");
 } catch (fehler) {
   fehlgeschlagen = true;
   console.error(`Connector-Hub-Nachweis abgebrochen: ${entschaerfen((fehler as Error).message)}`);
