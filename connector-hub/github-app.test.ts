@@ -20,6 +20,14 @@ function schluessel() {
   });
 }
 
+function schluesselPkcs1() {
+  return generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs1", format: "pem" },
+  });
+}
+
 function konfiguration(privateKeyPem: string): GitHubAppKonfiguration {
   return {
     appId: 42,
@@ -51,6 +59,14 @@ describe("GitHub App Connector", () => {
     expect(protectedHeader.alg).toBe("RS256");
     expect(payload.iat).toBe(Math.floor(jetzt / 1000) - 60);
     expect(payload.exp).toBe(Math.floor(jetzt / 1000) + 9 * 60);
+  });
+
+  it("signiert auch einen von GitHub üblichen PKCS#1-RSA-Key", async () => {
+    const keys = schluesselPkcs1();
+    const token = await githubAppJwt(konfiguration(keys.privateKey), 2_000_000_000_000);
+    const publicKey = await importSPKI(keys.publicKey, "RS256");
+
+    await expect(jwtVerify(token, publicKey, { issuer: "Iv1.byb-test" })).resolves.toBeDefined();
   });
 
   it("tauscht einen OAuth-Code serverseitig und gibt nur das Benutzer-Token intern zurück", async () => {
