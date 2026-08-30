@@ -25,6 +25,7 @@
     "auth",
     "control-plane",
     "connector-hub",
+    "agent-skills",
     "worker",
     "billing",
     "api"
