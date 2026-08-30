@@ -98,7 +98,10 @@ export const BYB_SKILLS = [
 ] as const satisfies readonly BybSkillDefinition[];
 
 export function planungsSkillHinweise(): string[] {
-  return BYB_SKILLS
-    .map((skill) => skill.planerHinweis)
-    .filter((hinweis): hinweis is string => typeof hinweis === "string");
+  const hinweise: string[] = [];
+  for (const skill of BYB_SKILLS) {
+    const hinweis: string | undefined = skill.planerHinweis;
+    if (hinweis !== undefined) hinweise.push(hinweis);
+  }
+  return hinweise;
 }
