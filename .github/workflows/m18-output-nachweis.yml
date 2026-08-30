@@ -1,0 +1,30 @@
+name: M1.8 Output-Nachweis
+
+on:
+  push:
+    branches: [m18-connector-auth-foundation]
+    paths:
+      - models/m18-output-nachweis.ts
+      - control-plane/planer.ts
+      - agent-skills/**
+      - .github/workflows/m18-output-nachweis.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kimi-output:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Kimi K3 gegen realistischen BYB-Auftrag prüfen
+        run: npx tsx models/m18-output-nachweis.ts
+        env:
+          NV_API_KEY_1: ${{ secrets.NV_API_KEY_1 }}
