@@ -38,6 +38,23 @@ function konfiguration(privateKeyPem: string): GitHubAppKonfiguration {
   };
 }
 
+function requestUrl(input: Parameters<typeof fetch>[0]): string {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  return input.url;
+}
+
+function jsonBody(init: Parameters<typeof fetch>[1]): Record<string, unknown> {
+  if (typeof init?.body !== "string") {
+    throw new Error("Test erwartete einen JSON-String als Request-Body.");
+  }
+  const daten: unknown = JSON.parse(init.body);
+  if (typeof daten !== "object" || daten === null || Array.isArray(daten)) {
+    throw new Error("Test erwartete ein JSON-Objekt als Request-Body.");
+  }
+  return daten as Record<string, unknown>;
+}
+
 describe("GitHub App Connector", () => {
   it("baut eine Installation-URL mit korrelierendem State", () => {
     const state = "abcdefghijklmnopqrstuvwxyzABCDEFGH1234567890_-";
@@ -72,9 +89,9 @@ describe("GitHub App Connector", () => {
   it("tauscht einen OAuth-Code serverseitig und gibt nur das Benutzer-Token intern zurück", async () => {
     const keys = schluessel();
     const fetchImpl: typeof fetch = (input, init) => {
-      expect(String(input)).toBe("https://github.com/login/oauth/access_token");
+      expect(requestUrl(input)).toBe("https://github.com/login/oauth/access_token");
       expect(init?.method).toBe("POST");
-      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const body = jsonBody(init);
       expect(body.client_id).toBe("Iv1.byb-test");
       expect(body.code).toBe("github-oauth-code-12345");
       return Promise.resolve(Response.json({ access_token: "ghu_test_access_token_123456789" }));
@@ -91,7 +108,7 @@ describe("GitHub App Connector", () => {
     const fetchImpl: typeof fetch = (input) => {
       aufruf += 1;
       if (aufruf === 1) {
-        expect(String(input)).toContain("/user/installations");
+        expect(requestUrl(input)).toContain("/user/installations");
         return Promise.resolve(Response.json({
           installations: [
             { id: 7, app_id: 42, account: { login: "firma" } },
@@ -99,7 +116,7 @@ describe("GitHub App Connector", () => {
           ],
         }));
       }
-      expect(String(input)).toContain("/user/installations/7/repositories");
+      expect(requestUrl(input)).toContain("/user/installations/7/repositories");
       return Promise.resolve(Response.json({
         total_count: 1,
         repositories: [{ id: 100, full_name: "firma/produkt", private: true }],
@@ -119,7 +136,7 @@ describe("GitHub App Connector", () => {
     const fetchImpl: typeof fetch = (input, init) => {
       aufruf += 1;
       if (aufruf === 1) {
-        expect(String(input)).toContain("/app/installations/7/access_tokens");
+        expect(requestUrl(input)).toContain("/app/installations/7/access_tokens");
         expect(init?.method).toBe("POST");
         expect(new Headers(init?.headers).get("authorization")).toMatch(/^Bearer /);
         return Promise.resolve(Response.json({
@@ -127,7 +144,7 @@ describe("GitHub App Connector", () => {
           expires_at: "2026-08-24T12:00:00Z",
         }));
       }
-      expect(String(input)).toBe("https://api.github.com/installation/repositories?per_page=100");
+      expect(requestUrl(input)).toBe("https://api.github.com/installation/repositories?per_page=100");
       expect(new Headers(init?.headers).get("authorization")).toBe(
         "Bearer ghs_installation_token_123456789",
       );
