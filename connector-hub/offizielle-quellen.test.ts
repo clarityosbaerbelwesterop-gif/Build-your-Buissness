@@ -52,8 +52,9 @@ describe("offizielle Connector-Quellen", () => {
 
   it("pinnt bekannte offizielle Remote-MCP-Endpunkte auf HTTPS", () => {
     for (const quelle of OFFIZIELLE_CONNECTOR_QUELLEN) {
-      if (typeof quelle.remoteMcp !== "string") continue;
-      const url = new URL(quelle.remoteMcp);
+      const remoteMcp = offizielleQuelleFuer(quelle.anbieter).remoteMcp;
+      if (remoteMcp === undefined) continue;
+      const url = new URL(remoteMcp);
       expect(url.protocol).toBe("https:");
       expect(url.username).toBe("");
       expect(url.password).toBe("");
