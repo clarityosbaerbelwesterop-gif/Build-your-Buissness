@@ -43,7 +43,9 @@ describe("offizielle Connector-Quellen", () => {
   });
 
   it("zieht keine gefundenen Community-Higgsfield-MCPs in die Lieferkette", () => {
-    const repositories = new Set(OFFIZIELLE_CONNECTOR_QUELLEN.map((quelle) => quelle.repository));
+    const repositories = new Set<string>(
+      OFFIZIELLE_CONNECTOR_QUELLEN.map((quelle) => quelle.repository),
+    );
     for (const communityRepo of COMMUNITY_HIGGSFIELD) {
       expect(repositories.has(communityRepo)).toBe(false);
     }
