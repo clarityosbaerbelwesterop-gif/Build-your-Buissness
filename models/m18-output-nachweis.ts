@@ -97,10 +97,10 @@ async function kimiFragen(
     body: JSON.stringify({
       model: KIMI_K3,
       messages,
-      temperature: 0.15,
-      max_tokens: 5_000,
+      temperature: 0.1,
+      max_tokens: 1_800,
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(240_000),
   });
   if (!response.ok) {
     throw new Error(`Kimi-K3-Nachweis abgelehnt (HTTP ${response.status}).`);
