@@ -52,7 +52,7 @@ describe("offizielle Connector-Quellen", () => {
 
   it("pinnt bekannte offizielle Remote-MCP-Endpunkte auf HTTPS", () => {
     for (const quelle of OFFIZIELLE_CONNECTOR_QUELLEN) {
-      if (quelle.remoteMcp === undefined) continue;
+      if (typeof quelle.remoteMcp !== "string") continue;
       const url = new URL(quelle.remoteMcp);
       expect(url.protocol).toBe("https:");
       expect(url.username).toBe("");
