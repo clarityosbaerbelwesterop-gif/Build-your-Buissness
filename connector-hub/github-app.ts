@@ -105,7 +105,8 @@ function githubHeaders(token: string): Headers {
 
 async function jsonAntwort(response: Response, kontext: string): Promise<unknown> {
   if (!response.ok) throw new Error(`${kontext} wurde von GitHub abgelehnt (HTTP ${response.status}).`);
-  return response.json() as Promise<unknown>;
+  const daten: unknown = await response.json();
+  return daten;
 }
 
 export async function githubBenutzerTokenAusCode(
