@@ -4,10 +4,13 @@ import { z } from "zod";
 import { bearerTokenAus, neonJwtKonfigurationAusUmgebung, neonJwtPruefer } from "../auth/neon-jwt.js";
 import {
   githubAppKonfigurationAusUmgebung,
+  githubBenutzerTokenAusCode,
   githubInstallationRepos,
+  githubInstallationenFuerBenutzer,
   githubInstallationsUrl,
 } from "../connector-hub/github-app.js";
 import { githubInstallationPruefen } from "../connector-hub/github-installation.js";
+import { githubBenutzerAutorisierungsUrl } from "../connector-hub/github-oauth.js";
 import {
   oauthSessionAutorisieren,
   oauthSessionStarten,
@@ -17,12 +20,15 @@ import { verbindungSpeichern } from "../connector-hub/speicher.js";
 import { zugang } from "../config/zugaenge.js";
 import type { SqlVerbindung, VerifizierteIdentitaet } from "../db/auth-kontext.js";
 
-const Aktion = z.enum(["start", "entdecken", "speichern"]);
-const Entdecken = z.object({
+const Aktion = z.enum(["start", "oauth", "entdecken", "speichern"]);
+const Installation = z.object({
   state: z.string().min(32).max(300),
   installationId: z.number().int().positive().safe(),
 }).strict();
-const Speichern = Entdecken.extend({
+const Entdecken = Installation.extend({
+  code: z.string().trim().min(10).max(500),
+}).strict();
+const Speichern = Installation.extend({
   repoId: z.number().int().positive().safe(),
 }).strict();
 
@@ -52,6 +58,12 @@ async function mitDatenbank<T>(arbeit: (db: SqlVerbindung) => Promise<T>): Promi
   } finally {
     await klient.end();
   }
+}
+
+function callbackUrl(request: Request): string {
+  const url = new URL("/github-connect.html", request.url);
+  if (url.protocol !== "https:") throw new Error("GitHub Callback muss HTTPS verwenden.");
+  return url.toString();
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -85,14 +97,48 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const roh: unknown = await request.json();
+    if (aktion === "oauth") {
+      const eingabe = Installation.parse(roh);
+      await githubInstallationPruefen(konfiguration, eingabe.installationId);
+      return json({
+        oauthUrl: githubBenutzerAutorisierungsUrl(
+          konfiguration,
+          eingabe.state,
+          callbackUrl(request),
+        ),
+      });
+    }
+
     if (aktion === "entdecken") {
       const eingabe = Entdecken.parse(roh);
-      const installation = await githubInstallationPruefen(konfiguration, eingabe.installationId);
-      const repos = await githubInstallationRepos(konfiguration, eingabe.installationId);
-      await mitDatenbank((db) =>
-        oauthSessionAutorisieren(db, identitaet, eingabe.state, [eingabe.installationId]),
+      const benutzerToken = await githubBenutzerTokenAusCode(
+        konfiguration,
+        eingabe.code,
       );
-      return json({ installation: { id: installation.id, konto: installation.konto }, repos });
+      const installationen = await githubInstallationenFuerBenutzer(konfiguration, benutzerToken);
+      const benutzerInstallation = installationen.find(
+        (installation) => installation.id === eingabe.installationId,
+      );
+      if (benutzerInstallation === undefined) {
+        return json({ fehler: "GITHUB_INSTALLATION_GEHOERT_NICHT_ZUM_BENUTZER" }, 403);
+      }
+      const installation = await githubInstallationPruefen(konfiguration, eingabe.installationId);
+      if (benutzerInstallation.repos.length === 0) {
+        return json({ fehler: "GITHUB_KEIN_REPO_FREIGEGEBEN" }, 409);
+      }
+      await mitDatenbank((db) =>
+        oauthSessionAutorisieren(
+          db,
+          identitaet,
+          eingabe.state,
+          [eingabe.installationId],
+          benutzerInstallation.repos.map((repo) => String(repo.id)),
+        ),
+      );
+      return json({
+        installation: { id: installation.id, konto: installation.konto },
+        repos: benutzerInstallation.repos,
+      });
     }
 
     const eingabe = Speichern.parse(roh);
@@ -102,7 +148,13 @@ export async function POST(request: Request): Promise<Response> {
     if (repo === undefined) return json({ fehler: "GITHUB_REPO_NICHT_FREIGEGEBEN" }, 403);
 
     await mitDatenbank(async (db) => {
-      await oauthSessionVerbrauchen(db, identitaet, eingabe.state, eingabe.installationId);
+      await oauthSessionVerbrauchen(
+        db,
+        identitaet,
+        eingabe.state,
+        eingabe.installationId,
+        String(eingabe.repoId),
+      );
       await verbindungSpeichern(db, identitaet, {
         version: 1,
         id: `github-${eingabe.installationId}`,
