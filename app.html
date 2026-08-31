@@ -51,11 +51,17 @@
   const TOKEN_KEY='byb_access_token';
   const providers=[
     {key:'github',name:'GitHub',text:'Repository auswählen und BYB nur auf freigegebenen Repos arbeiten lassen.'},
+    {key:'neon',name:'Neon',text:'Neon-Projekt als Backend und Auth-Ressource auswählen.'},
+    {key:'supabase',name:'Supabase',text:'Alternativ ein Supabase-Projekt als Backend auswählen.'},
     {key:'vercel',name:'Vercel',text:'Projekt für Preview und freigegebene Deployments auswählen.'},
-    {key:'neon',alt:'supabase',name:'Neon / Supabase',text:'Genau ein Backend-Projekt pro BYB-Projekt auswählen.'},
     {key:'stripe',name:'Stripe',text:'Abos, Credits und spätere Produkt-Payments verbinden.'},
-    {key:'google_search_console',name:'Google Search Console',text:'Indexierung nach einem freigegebenen Launch verwalten.'},
-    {key:'higgsfield',name:'Higgsfield',text:'Werbemittel später aus freigegebenen Kampagnenzielen erzeugen.'}
+    {key:'higgsfield',name:'Higgsfield',text:'Workspace für Bild- und Video-Werbemittel auswählen.'},
+    {key:'meta_ads',name:'Meta Ads',text:'Business- und Ad-Account für freigegebene Kampagnen auswählen.'},
+    {key:'tiktok_ads',name:'TikTok Ads',text:'Advertiser-Konto für freigegebene Kampagnen auswählen.'},
+    {key:'youtube',name:'YouTube',text:'Kanal für freigegebene Veröffentlichungen auswählen.'},
+    {key:'google_search_console',name:'Google Search Console',text:'Property für Indexierung nach einem freigegebenen Launch auswählen.'},
+    {key:'google_ads',name:'Google Ads',text:'Google-Ads-Konto für freigegebene Kampagnen auswählen.'},
+    {key:'wix',name:'Wix',text:'Site als Landingpage- und Designquelle auswählen.'}
   ];
   const grid=document.getElementById('connectorGrid');
   const credit=document.getElementById('creditValue');
@@ -91,7 +97,7 @@
   function renderConnectoren(verbindungen){
     grid.replaceChildren();
     providers.forEach(provider=>{
-      const verbindung=verbindungen.find(item=>item.anbieter===provider.key||(provider.alt&&item.anbieter===provider.alt));
+      const verbindung=verbindungen.find(item=>item.anbieter===provider.key);
       const card=document.createElement('article');card.className='connector';
       const head=document.createElement('div');head.className='connector-head';
       const title=document.createElement('h3');title.textContent=provider.name;
