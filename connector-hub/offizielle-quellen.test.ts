@@ -37,8 +37,10 @@ describe("offizielle Connector-Quellen", () => {
 
   it("akzeptiert nur Hersteller-Organisationen als Upstream", () => {
     for (const quelle of OFFIZIELLE_CONNECTOR_QUELLEN) {
-      const owner = quelle.repository.split("/")[0];
-      expect(OFFIZIELLE_OWNER.has(owner ?? "")).toBe(true);
+      const [owner] = quelle.repository.split("/");
+      expect(typeof owner).toBe("string");
+      if (owner === undefined) throw new Error("Connector-Repository hat keinen Owner.");
+      expect(OFFIZIELLE_OWNER.has(owner)).toBe(true);
     }
   });
 
