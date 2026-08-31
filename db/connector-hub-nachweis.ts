@@ -194,7 +194,7 @@ try {
 
   let fremderMandantKonnteAutorisieren = false;
   try {
-    await oauthSessionAutorisieren(db, identitaetB, oauth.state, [7]);
+    await oauthSessionAutorisieren(db, identitaetB, oauth.state, [7], ["100"]);
     fremderMandantKonnteAutorisieren = true;
   } catch {
     fremderMandantKonnteAutorisieren = false;
@@ -203,14 +203,18 @@ try {
     throw new Error("Ein fremder Mandant konnte eine OAuth-Sitzung übernehmen.");
   }
 
-  const autorisiert = await oauthSessionAutorisieren(db, identitaetA, oauth.state, [7]);
-  if (autorisiert.phase !== "autorisiert" || autorisiert.erlaubteInstallationen[0] !== 7) {
-    throw new Error("OAuth-Sitzung wurde nicht mit der erlaubten Installation autorisiert.");
+  const autorisiert = await oauthSessionAutorisieren(db, identitaetA, oauth.state, [7], ["100"]);
+  if (
+    autorisiert.phase !== "autorisiert"
+    || autorisiert.erlaubteInstallationen[0] !== 7
+    || autorisiert.erlaubteRessourcen[0] !== "100"
+  ) {
+    throw new Error("OAuth-Sitzung wurde nicht auf Installation und Ressource begrenzt.");
   }
 
   let falscheInstallationKonnteVerbrauchen = false;
   try {
-    await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 8);
+    await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 8, "100");
     falscheInstallationKonnteVerbrauchen = true;
   } catch {
     falscheInstallationKonnteVerbrauchen = false;
@@ -219,10 +223,21 @@ try {
     throw new Error("Nicht autorisierte Installation konnte OAuth-State verbrauchen.");
   }
 
-  await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 7);
+  let falschesRepoKonnteVerbrauchen = false;
+  try {
+    await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 7, "200");
+    falschesRepoKonnteVerbrauchen = true;
+  } catch {
+    falschesRepoKonnteVerbrauchen = false;
+  }
+  if (falschesRepoKonnteVerbrauchen) {
+    throw new Error("Nicht autorisierte Ressource konnte OAuth-State verbrauchen.");
+  }
+
+  await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 7, "100");
   let stateKonnteDoppeltVerbrauchtWerden = false;
   try {
-    await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 7);
+    await oauthSessionVerbrauchen(db, identitaetA, oauth.state, 7, "100");
     stateKonnteDoppeltVerbrauchtWerden = true;
   } catch {
     stateKonnteDoppeltVerbrauchtWerden = false;
@@ -235,7 +250,7 @@ try {
   console.error("Geprüft: gleiche Connector-/Projekt-IDs bleiben zwischen zwei Mandanten getrennt.");
   console.error("Geprüft: Resource Picks werden gegen eigene verbundene Ressourcen aufgelöst.");
   console.error("Geprüft: byb_worker kann Resource Picks lesen, aber Connector-Daten nicht verändern.");
-  console.error("Geprüft: OAuth-State liegt nur als Hash vor und ist mandanten- sowie installationsgebunden.");
+  console.error("Geprüft: OAuth-State liegt nur als Hash vor und ist mandanten-, installations- und ressourcengebunden.");
   console.error("Geprüft: OAuth-State ist nach erfolgreichem Verbrauch nicht wiederverwendbar.");
 } catch (fehler) {
   fehlgeschlagen = true;
