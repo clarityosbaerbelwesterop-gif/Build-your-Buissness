@@ -14,18 +14,24 @@
 <main class="card">
   <span class="caps">Connector Hub / GitHub</span>
   <h1>Repository freigeben</h1>
-  <p class="muted">BYB zeigt nur Repositories, die du der BYB GitHub App bei GitHub freigegeben hast. Wähle genau das Repository, auf dem BYB arbeiten darf.</p>
+  <p class="muted">BYB prüft zuerst deine GitHub-Identität und zeigt danach nur Repositories, die deine BYB-App-Installation und dein GitHub-Nutzer gemeinsam sehen dürfen.</p>
   <div class="repos" id="repos" aria-live="polite"></div>
   <button class="button" id="save" type="button" disabled>Repository mit BYB verbinden</button>
-  <div class="status" id="status" role="status" aria-live="polite">GitHub-Installation wird geprüft…</div>
+  <div class="status" id="status" role="status" aria-live="polite">GitHub-Verbindung wird geprüft…</div>
   <p class="muted"><a href="/app.html">Zurück zum Leitstand</a></p>
 </main>
 <script>
 (() => {
   'use strict';
+  const INSTALLATION_KEY='byb_github_installation_id';
   const params=new URLSearchParams(location.search);
   const state=params.get('state');
-  const installationId=Number(params.get('installation_id'));
+  const code=params.get('code');
+  const installationFromGitHub=Number(params.get('installation_id'));
+  const storedInstallation=Number(sessionStorage.getItem(INSTALLATION_KEY));
+  const installationId=Number.isSafeInteger(installationFromGitHub)&&installationFromGitHub>0
+    ? installationFromGitHub
+    : storedInstallation;
   const reposEl=document.getElementById('repos');
   const save=document.getElementById('save');
   const status=document.getElementById('status');
@@ -66,22 +72,29 @@
 
   async function laden(){
     if(typeof state!=='string'||state.length<32||!Number.isSafeInteger(installationId)||installationId<=0){
-      show('GitHub hat keine gültige BYB-Installation zurückgegeben.',true);return;
+      show('GitHub hat keine gültige BYB-Verbindung zurückgegeben.',true);return;
     }
     token=await accessToken();
     if(token===null){location.replace('/login.html');return}
     try{
-      const data=await post('entdecken',{state,installationId});
+      if(typeof code!=='string'||code.length<10){
+        sessionStorage.setItem(INSTALLATION_KEY,String(installationId));
+        const data=await post('oauth',{state,installationId});
+        if(typeof data.oauthUrl!=='string')throw new Error('GITHUB_OAUTH_URL');
+        location.assign(data.oauthUrl);return;
+      }
+      const data=await post('entdecken',{state,installationId,code});
+      sessionStorage.removeItem(INSTALLATION_KEY);
       repos=Array.isArray(data.repos)?data.repos:[];
       render();
-      show(repos.length?'Wähle jetzt ein freigegebenes Repository.':'In dieser Installation ist kein Repository für BYB freigegeben.',repos.length===0);
-    }catch{show('Die GitHub-Installation konnte nicht verifiziert werden. Prüfe die BYB-App-Berechtigungen und versuche es erneut.',true)}
+      show(repos.length?'Wähle jetzt ein von GitHub bestätigtes Repository.':'Für diesen Nutzer ist in der Installation kein Repository freigegeben.',repos.length===0);
+    }catch{show('GitHub konnte Nutzer, Installation oder Repository-Rechte nicht gemeinsam verifizieren.',true)}
   }
 
   save.addEventListener('click',async()=>{
     const checked=document.querySelector('input[name="repo"]:checked');
     if(!(checked instanceof HTMLInputElement))return;
-    save.disabled=true;show('Repository wird noch einmal gegen GitHub geprüft…');
+    save.disabled=true;show('Repository wird noch einmal gegen die autorisierte Auswahl geprüft…');
     try{
       await post('speichern',{state,installationId,repoId:Number(checked.value)});
       location.replace('/app.html#connectoren');
