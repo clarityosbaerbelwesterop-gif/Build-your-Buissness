@@ -20,6 +20,42 @@ describe("BYB Produktoberfläche", () => {
     expect(app).toContain("Noch kein Vorgang.");
   });
 
+  it("zeigt den vollständigen Connector-Katalog ohne Verbindungen zu erfinden", () => {
+    const app = lesen("app.html");
+    for (const name of [
+      "GitHub",
+      "Neon",
+      "Supabase",
+      "Vercel",
+      "Stripe",
+      "Higgsfield",
+      "Meta Ads",
+      "TikTok Ads",
+      "YouTube",
+      "Google Search Console",
+      "Google Ads",
+      "Wix",
+    ]) {
+      expect(app).toContain(`name:'${name}'`);
+    }
+    expect(app).toContain("else state.textContent='Nicht verbunden'");
+    expect(app).toContain("item.anbieter===provider.key");
+  });
+
+  it("startet GitHub nur aus einer echten Nutzer-Session und nutzt einen eigenen Repo-Picker", () => {
+    const app = lesen("app.html");
+    const picker = lesen("github-connect.html");
+
+    expect(app).toContain("GitHub verbinden");
+    expect(app).toContain("/api/github-connect?aktion=start");
+    expect(app).toContain("authorization:'Bearer '+token");
+    expect(picker).toContain("/api/github-connect?aktion=oauth");
+    expect(picker).toContain("/api/github-connect?aktion=entdecken");
+    expect(picker).toContain("/api/github-connect?aktion=speichern");
+    expect(picker).toContain("sessionStorage.setItem(INSTALLATION_KEY");
+    expect(picker).not.toContain("localStorage.setItem('github");
+  });
+
   it("sendet ein Nutzerziel an die echte Auftrags-API und zeigt den gespeicherten Plan", () => {
     const app = lesen("app.html");
 

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>BYB — GitHub verbinden</title>
+  <style>
+    :root{--ink:#0F1720;--panel:#17263A;--paper:#E6E4DD;--muted:#AAB5C3;--line:#40546C;--error:#E4572E}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--ink);color:#F5F6F2;font-family:Inter,system-ui,-apple-system,sans-serif;display:grid;place-items:center;padding:24px}.card{width:min(620px,100%);background:var(--panel);border:1px solid #304158;padding:28px;border-radius:5px}h1{margin:5px 0 12px;font-size:34px;letter-spacing:-.04em}.caps{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:#8894A3}.muted{color:var(--muted);line-height:1.55}.repos{display:grid;gap:8px;margin:20px 0}.repo{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);padding:13px;background:#101B28;cursor:pointer}.repo input{margin-top:3px}.repo span{overflow-wrap:anywhere}.button{width:100%;min-height:44px;border:1px solid var(--paper);background:var(--paper);color:var(--ink);font:inherit;font-weight:800;cursor:pointer}.button:disabled{opacity:.45;cursor:not-allowed}.status{margin-top:16px;color:var(--muted);font-size:13px;line-height:1.45}.status.error{color:#F2B6A3;border-left:2px solid var(--error);padding-left:10px}a{color:var(--paper)}
+  </style>
+</head>
+<body>
+<main class="card">
+  <span class="caps">Connector Hub / GitHub</span>
+  <h1>Repository freigeben</h1>
+  <p class="muted">BYB prüft zuerst deine GitHub-Identität und zeigt danach nur Repositories, die deine BYB-App-Installation und dein GitHub-Nutzer gemeinsam sehen dürfen.</p>
+  <div class="repos" id="repos" aria-live="polite"></div>
+  <button class="button" id="save" type="button" disabled>Repository mit BYB verbinden</button>
+  <div class="status" id="status" role="status" aria-live="polite">GitHub-Verbindung wird geprüft…</div>
+  <p class="muted"><a href="/app.html">Zurück zum Leitstand</a></p>
+</main>
+<script>
+(() => {
+  'use strict';
+  const INSTALLATION_KEY='byb_github_installation_id';
+  const params=new URLSearchParams(location.search);
+  const state=params.get('state');
+  const code=params.get('code');
+  const installationFromGitHub=Number(params.get('installation_id'));
+  const storedInstallation=Number(sessionStorage.getItem(INSTALLATION_KEY));
+  const installationId=Number.isSafeInteger(installationFromGitHub)&&installationFromGitHub>0
+    ? installationFromGitHub
+    : storedInstallation;
+  const reposEl=document.getElementById('repos');
+  const save=document.getElementById('save');
+  const status=document.getElementById('status');
+  let token=null;
+  let repos=[];
+
+  const readJson=async(response)=>{try{return await response.json()}catch{return {}}};
+  const show=(text,error=false)=>{status.textContent=text;status.classList.toggle('error',error)};
+
+  async function accessToken(){
+    const response=await fetch('/api/auth?aktion=token',{credentials:'same-origin',headers:{accept:'application/json'}});
+    if(!response.ok)return null;
+    const data=await readJson(response);
+    return typeof data.token==='string'&&data.token.length>=20?data.token:null;
+  }
+
+  async function post(aktion,body){
+    const response=await fetch('/api/github-connect?aktion='+encodeURIComponent(aktion),{
+      method:'POST',
+      headers:{authorization:'Bearer '+token,accept:'application/json','content-type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    const data=await readJson(response);
+    if(!response.ok)throw new Error(typeof data.fehler==='string'?data.fehler:'GITHUB_CONNECT');
+    return data;
+  }
+
+  function render(){
+    reposEl.replaceChildren();
+    repos.forEach(repo=>{
+      const label=document.createElement('label');label.className='repo';
+      const input=document.createElement('input');input.type='radio';input.name='repo';input.value=String(repo.id);
+      const text=document.createElement('span');text.textContent=repo.name+(repo.privat?' · privat':' · öffentlich');
+      input.addEventListener('change',()=>{save.disabled=false});
+      label.append(input,text);reposEl.append(label);
+    });
+  }
+
+  async function laden(){
+    if(typeof state!=='string'||state.length<32||!Number.isSafeInteger(installationId)||installationId<=0){
+      show('GitHub hat keine gültige BYB-Verbindung zurückgegeben.',true);return;
+    }
+    token=await accessToken();
+    if(token===null){location.replace('/login.html');return}
+    try{
+      if(typeof code!=='string'||code.length<10){
+        sessionStorage.setItem(INSTALLATION_KEY,String(installationId));
+        const data=await post('oauth',{state,installationId});
+        if(typeof data.oauthUrl!=='string')throw new Error('GITHUB_OAUTH_URL');
+        location.assign(data.oauthUrl);return;
+      }
+      const data=await post('entdecken',{state,installationId,code});
+      sessionStorage.removeItem(INSTALLATION_KEY);
+      repos=Array.isArray(data.repos)?data.repos:[];
+      render();
+      show(repos.length?'Wähle jetzt ein von GitHub bestätigtes Repository.':'Für diesen Nutzer ist in der Installation kein Repository freigegeben.',repos.length===0);
+    }catch{show('GitHub konnte Nutzer, Installation oder Repository-Rechte nicht gemeinsam verifizieren.',true)}
+  }
+
+  save.addEventListener('click',async()=>{
+    const checked=document.querySelector('input[name="repo"]:checked');
+    if(!(checked instanceof HTMLInputElement))return;
+    save.disabled=true;show('Repository wird noch einmal gegen die autorisierte Auswahl geprüft…');
+    try{
+      await post('speichern',{state,installationId,repoId:Number(checked.value)});
+      location.replace('/app.html#connectoren');
+    }catch{show('Das Repository konnte nicht gespeichert werden. Die Freigabe wurde nicht erweitert.',true);save.disabled=false}
+  });
+
+  void laden();
+})();
+</script>
+</body>
+</html>

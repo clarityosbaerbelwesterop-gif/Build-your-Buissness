@@ -43,6 +43,42 @@ describe("Control-Plane Planer", () => {
     expect(verbindungenFuerAktion("payments", verbindungen)).toEqual([]);
   });
 
+  it("gibt dem Modell die auditierten BYB-Skill-Leitplanken mit", async () => {
+    let system = "";
+    await auftragAusZielPlanen(
+      "nutzer-1",
+      "Baue eine belastbare Produktseite und prüfe den vollständigen Nutzerfluss.",
+      120,
+      verbindungen,
+      {
+        idErzeugen: () => "skills",
+        fragenImpl: (_rolle, auftrag) => {
+          system = auftrag.system ?? "";
+          return Promise.resolve({
+            text: JSON.stringify({
+              aktionen: [
+                {
+                  typ: "code",
+                  titel: "Produktseite bauen",
+                  beschreibung: "BYB implementiert den vollständigen Nutzerfluss.",
+                  abhaengigkeiten: [],
+                },
+              ],
+            }),
+            tokensEin: 1,
+            tokensAus: 1,
+            modell: "test",
+          });
+        },
+      },
+    );
+
+    expect(system).toContain("auditierten BYB-Skill-Leitplanken");
+    expect(system).toContain("messbare Abnahmekriterien");
+    expect(system).toContain("responsive und zugängliche Nutzerflüsse");
+    expect(system).toContain("Canonical, robots, Sitemap");
+  });
+
   it("validiert Modell-JSON und baut einen echten Auftrag ohne erfundene Ausführung", async () => {
     const auftrag = await auftragAusZielPlanen(
       "nutzer-1",

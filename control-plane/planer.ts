@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
+import { planungsSkillHinweise } from "../agent-skills/katalog.js";
 import type { ConnectorVerbindung } from "../connector-hub/v1.js";
 import { fragen, type Antwort } from "../models/nvidia.js";
 import {
@@ -144,6 +145,7 @@ function jsonAusText(text: string): unknown {
 }
 
 function systemPrompt(): string {
+  const skillHinweise = planungsSkillHinweise().map((hinweis) => `- ${hinweis}`);
   return [
     "Du bist der interne Planer von Build your Buissness (BYB).",
     "Zerlege das Nutzerziel in einen kleinen, ausführbaren Aktionsgraphen.",
@@ -155,6 +157,8 @@ function systemPrompt(): string {
     "Deploy, Domain, Indexierung und Payments werden später separat freigegeben.",
     "Ads werden später separat mit Budget freigegeben.",
     "Keine Secrets, Tokens, Zugangsdaten, URLs mit Credentials oder personenbezogenen Daten erfinden.",
+    "Nutze zusätzlich diese auditierten BYB-Skill-Leitplanken:",
+    ...skillHinweise,
   ].join("\n");
 }
 

@@ -4,7 +4,7 @@ import { bearerTokenAus, neonJwtKonfigurationAusUmgebung, neonJwtPruefer } from 
 import { zugang } from "../config/zugaenge.js";
 import { verbindungenLaden } from "../connector-hub/speicher.js";
 import type { ConnectorVerbindung } from "../connector-hub/v1.js";
-import type { SqlVerbindung } from "../db/auth-kontext.js";
+import type { SqlVerbindung, VerifizierteIdentitaet } from "../db/auth-kontext.js";
 
 export interface ConnectorUebersicht {
   readonly id: string;
@@ -20,6 +20,11 @@ export interface ConnectorUebersicht {
 
 function json(daten: unknown, status = 200): Response {
   return Response.json(daten, { status, headers: { "cache-control": "no-store" } });
+}
+
+async function identitaetAus(request: Request): Promise<VerifizierteIdentitaet> {
+  const token = bearerTokenAus(request.headers.get("authorization") ?? undefined);
+  return neonJwtPruefer(neonJwtKonfigurationAusUmgebung())(token);
 }
 
 export function connectorUebersicht(
@@ -39,27 +44,30 @@ export function connectorUebersicht(
 }
 
 export async function GET(request: Request): Promise<Response> {
+  let identitaet: VerifizierteIdentitaet;
   try {
-    const token = bearerTokenAus(request.headers.get("authorization") ?? undefined);
-    const identitaet = await neonJwtPruefer(neonJwtKonfigurationAusUmgebung())(token);
-    const klient = new Client({
-      connectionString: zugang("datenbankUrl"),
-      ssl: { rejectUnauthorized: true },
-    });
-    await klient.connect();
-    try {
-      const verbindung: SqlVerbindung = {
-        query: async (sql, werte) => {
-          const ergebnis = await klient.query<Record<string, unknown>>(sql, werte);
-          return { rows: ergebnis.rows };
-        },
-      };
-      const daten = await verbindungenLaden(verbindung, identitaet);
-      return json({ verbindungen: connectorUebersicht(daten) });
-    } finally {
-      await klient.end();
-    }
+    identitaet = await identitaetAus(request);
   } catch {
     return json({ fehler: "NICHT_AUTORISIERT" }, 401);
+  }
+
+  const klient = new Client({
+    connectionString: zugang("datenbankUrl"),
+    ssl: { rejectUnauthorized: true },
+  });
+  try {
+    await klient.connect();
+    const verbindung: SqlVerbindung = {
+      query: async (sql, werte) => {
+        const ergebnis = await klient.query<Record<string, unknown>>(sql, werte);
+        return { rows: ergebnis.rows };
+      },
+    };
+    const daten = await verbindungenLaden(verbindung, identitaet);
+    return json({ verbindungen: connectorUebersicht(daten) });
+  } catch {
+    return json({ fehler: "CONNECTOREN_NICHT_VERFUEGBAR" }, 503);
+  } finally {
+    await klient.end().catch(() => undefined);
   }
 }
