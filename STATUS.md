@@ -1,6 +1,6 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M1.6 ist als `b80ff240` auf `main`. M1.7 verbindet den sichtbaren Chathub mit der persistenten Control Plane; der öffentliche Livegang bleibt blockiert.**
+Stand: **M1.7 ist als `14c44e5` auf `main`. M1.8 legt Surface v1 als dünne Idee-zu-Angebot-Seite über die bestehende Control Plane; der öffentliche Livegang bleibt blockiert.**
 
 - M0.5 / PR #7: `main` (`234dbe33`)
 - M0.6 / PR #8: `main` (`8776c66d`)
@@ -15,7 +15,8 @@ Stand: **M1.6 ist als `b80ff240` auf `main`. M1.7 verbindet den sichtbaren Chath
 - M1.5 / PR #17: `main` (`d643cca3`)
 - Post-Merge-Status / PR #18: `main` (`3f3dc071`)
 - M1.6 / PR #19: `main` (`b80ff240`)
-- M1.7 / PR #20: Branch `m17-real-chathub-orders`
+- M1.7 / PR #20: `main` (`14c44e5`)
+- M1.8 / PR (dieser Branch): Surface v1
 
 ## Produktkern
 
@@ -24,6 +25,16 @@ Stand: **M1.6 ist als `b80ff240` auf `main`. M1.7 verbindet den sichtbaren Chath
 > **Vom Repo bis zum Deploy bis zum Werbespot — BYB macht alles für dich.**
 
 Der Nutzer beschreibt Ziele und Grenzen. Der interne Auftrag ist nur die dauerhafte Ausführungs- und Wiederaufnahme-Infrastruktur unter dem Chathub.
+
+## M1.8 — Surface v1
+
+Eine ruhige Seite `/surface.html`: Idee eingeben, danach Landing-Vorschau, Anfragen-Aufnahme und ein Agent-Status. Der Lauf ist ein normaler BYB-Auftrag (`projekt_id = surface-v1`) mit den bestehenden Aktionen `code` / `backend` / `planen`. Kein zweites Kernsystem, kein Zahlungsfluss, kein CRM, keine Zeichenfläche.
+
+Schritte rufen vorhandene Endpunkte nur, wenn die Umgebung sie setzt (`STUDIO_BASE_URL`, `ZEUS_BASE_URL`/`AGENT_BASE_URL`, `SCP_BASE_URL`/`ODIN_SCP_URL`). Fehlt die Umgebung, bleibt der Zustand leer und ehrlich. Es gibt keinen lokalen Prüfer und keinen erfundenen Verbrauch.
+
+Landing-Texte kommen aus dem schnellen Modell, falls der Schlüssel da ist, sonst aus der Idee selbst. Anfragen liegen in `surface_leads` (Migration `006_surface.sql`, RLS, noch nicht produktiv angewendet).
+
+Offen: produktive Anwendung von Migration 006, echte Agenten-/Angebots-Laufzeit und Verbrauchsmeldung.
 
 ## M1.6 — echte Produktoberfläche
 
@@ -131,7 +142,7 @@ Nicht bekannte Register-, Steuer-, Aufsichts- oder Unternehmensform-Angaben werd
 
 ## Nächste Schritte bis „Owner kann alles prüfen“
 
-1. PR #20 abschließen und auf `main` bringen.
+1. Surface-v1-PR mergen, danach Migration 006 nur mit ausdrücklicher Freigabe anwenden.
 2. Connector-Auth-Grundlage mit sicherer Secret-Ablage und echtem Resource Picker bauen; GitHub zuerst.
 3. Unterstützten Social Login sauber abschließen; mindestens GitHub zusätzlich zu E-Mail/Passwort, sofern die nötige BYB-OAuth-App produktiv konfiguriert werden kann.
 4. Cloud-Worker an die persistenten Aufträge hängen und GitHub-Ausführung aus dem Chathub nachweisen.

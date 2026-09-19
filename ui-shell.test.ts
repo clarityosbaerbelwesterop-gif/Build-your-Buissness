@@ -47,12 +47,30 @@ describe("BYB Produktoberfläche", () => {
   });
 
   it("verlinkt die rechtlichen Seiten auf den zentralen Oberflächen", () => {
-    for (const datei of ["index.html", "login.html", "app.html", "billing.html"]) {
+    for (const datei of ["index.html", "login.html", "app.html", "billing.html", "surface.html"]) {
       const inhalt = lesen(datei);
       expect(inhalt).toContain('/impressum.html');
       expect(inhalt).toContain('/datenschutz.html');
       expect(inhalt).toContain('/agb.html');
       expect(inhalt).toContain('/eula.html');
     }
+  });
+
+  it("bietet Surface v1 als eine Idee-zu-Angebot-Seite ohne Leitstand-Chrome", () => {
+    const surface = lesen("surface.html");
+    const app = lesen("app.html");
+    const landing = lesen("index.html");
+
+    expect(surface).toContain("Schreib die Idee. BYB macht daraus ein Angebot.");
+    expect(surface).toContain("fetch('/api/surface'");
+    expect(surface).toContain("fetch('/api/surface-leads'");
+    expect(surface).toContain("Landing-Vorschau");
+    expect(surface).toContain("Anfragen-Aufnahme");
+    expect(surface).toContain("Agent starten");
+    expect(surface).not.toContain("Connector Hub");
+    expect(surface).not.toContain("Plan erstellen");
+    expect(surface).not.toMatch(/Zeus|Studio|SCP|Neon|NVIDIA|Vercel|Stripe|GitHub|CRM|Canvas/i);
+    expect(app).toContain('href="/surface.html"');
+    expect(landing).toContain('href="/surface.html"');
   });
 });

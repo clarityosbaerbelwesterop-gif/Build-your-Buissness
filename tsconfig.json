@@ -27,6 +27,7 @@
     "connector-hub",
     "worker",
     "billing",
-    "api"
+    "api",
+    "surface"
   ]
 }
