@@ -1,0 +1,6 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "env": {
+    "BYB_ALLOW_UNPAID_SURFACE": "1"
+  }
+}
