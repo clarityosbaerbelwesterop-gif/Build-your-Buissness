@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>BYB — Aus der Idee ein Angebot</title>
+  <meta name="description" content="Eine Idee eingeben. BYB zeigt eine Landing-Vorschau, nimmt Anfragen auf und startet einen Agenten.">
+  <style>
+    :root{--ink:#0F1720;--blueprint:#17263A;--paper:#E6E4DD;--stahl:#6B7785;--befund:#E4572E;--siegel:#3F7D5A;--line:#D3D0C7;--max:760px}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#F3F1EA;color:var(--ink);font-family:Georgia,"Times New Roman",serif}a{color:inherit}
+    .wrap{width:min(var(--max),calc(100% - 32px));margin:auto}.sans{font-family:system-ui,-apple-system,sans-serif}.caps{font-family:system-ui,-apple-system,sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--stahl)}
+    header{border-bottom:1px solid var(--line);background:#EDEAE2;position:sticky;top:0;z-index:5}nav{min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{font-family:system-ui,sans-serif;font-size:18px;font-weight:800;text-decoration:none;letter-spacing:-.03em}.brand span{color:var(--stahl);font-weight:500}.navlinks{display:flex;gap:16px;align-items:center;font-family:system-ui,sans-serif;font-size:13px;color:#4D5A68}.navlinks a{text-decoration:none}
+    main{padding:48px 0 72px}h1{font-size:clamp(36px,7vw,56px);line-height:1.05;letter-spacing:-.04em;margin:10px 0 14px;font-weight:650}.lead{font-size:18px;line-height:1.5;color:#3A4654;margin:0 0 28px;max-width:40rem}
+    .idea{background:var(--paper);border:1px solid #C9C5BA;border-radius:3px;padding:24px}textarea{width:100%;min-height:140px;resize:vertical;border:1px solid #B7B3A8;background:#FAF8F2;color:var(--ink);border-radius:2px;padding:14px;font:inherit;line-height:1.5;margin-top:12px}textarea:focus{outline:2px solid var(--blueprint);outline-offset:2px}
+    .actions{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:14px}.hint{font-family:system-ui,sans-serif;font-size:12px;color:var(--stahl);max-width:420px}
+    .button{border:1px solid var(--blueprint);background:var(--blueprint);color:var(--paper);min-height:44px;padding:0 16px;border-radius:2px;font-family:system-ui,sans-serif;font-weight:700;cursor:pointer}.button:disabled{opacity:.45;cursor:not-allowed}.button.ghost{background:transparent;color:var(--ink);border-color:#B7B3A8}
+    .status{font-family:system-ui,sans-serif;border-left:2px solid var(--siegel);padding:12px 14px;margin-top:18px;background:#E7EEE8;color:#2C4336;font-size:13px;line-height:1.45}.status.error{border-color:var(--befund);background:#F3E6E1;color:#5C3226}
+    .work{margin-top:14px;font-family:system-ui,sans-serif}.work p{margin:6px 0;font-size:13px;color:#445160}.work p[aria-current="step"]{color:var(--ink);font-weight:650}
+    .result{margin-top:28px;display:grid;gap:16px}.panel{background:#FAF8F2;border:1px solid #C9C5BA;border-radius:3px;padding:24px}.panel h2{font-size:22px;margin:6px 0 10px;letter-spacing:-.02em}.muted{font-family:system-ui,sans-serif;font-size:13px;line-height:1.5;color:#4D5A68}
+    .preview{width:100%;min-height:320px;border:1px solid #C9C5BA;background:#fff;border-radius:2px}.empty{border:1px dashed #B7B3A8;padding:22px;color:#5C6B7A;font-family:system-ui,sans-serif;font-size:14px;line-height:1.5}.empty strong{display:block;color:var(--ink);margin-bottom:6px;font-family:Georgia,serif;font-size:18px}
+    form.lead label{display:block;font-family:system-ui,sans-serif;font-size:13px;margin:12px 0 6px}form.lead input,form.lead textarea{width:100%;min-height:42px;border:1px solid #B7B3A8;border-radius:2px;background:#fff;padding:8px 10px;font-family:system-ui,sans-serif;font-size:14px}form.lead textarea{min-height:90px}
+    .agent{display:flex;gap:12px;align-items:flex-start}.dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--stahl);margin-top:6px;flex:none}.dot.on{background:var(--siegel);border-color:var(--siegel)}.dot.wait{border-color:var(--stahl)}.dot.fail{background:var(--befund);border-color:var(--befund)}
+    .credits{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--stahl);margin-top:10px}
+    footer{border-top:1px solid var(--line);padding:28px 0 38px;color:var(--stahl);font-family:system-ui,sans-serif;font-size:12px}.footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.footer nav{min-height:auto;display:flex;gap:14px}.footer a{color:#4D5A68}
+    @media(max-width:640px){.actions{flex-direction:column;align-items:stretch}.button{width:100%}}
+    @media(prefers-reduced-motion:reduce){.dot{animation:none}}
+  </style>
+</head>
+<body>
+<header><nav class="wrap"><a class="brand" href="/surface.html">BYB <span>/ Idee</span></a><div class="navlinks sans"><a href="/app.html">Leitstand</a><a href="/billing.html">Abrechnung</a></div></nav></header>
+<main class="wrap">
+  <span class="caps">Idee zu Angebot</span>
+  <h1>Schreib die Idee. BYB macht daraus ein Angebot.</h1>
+  <p class="lead">Eine Seite, drei Ergebnisse: Landing-Vorschau, Anfragen-Aufnahme und ein Agent. Kein Zahlungsfluss, keine Kundenliste, keine Zeichenfläche.</p>
+
+  <section class="idea" aria-labelledby="ideeTitel">
+    <span class="caps">Deine Idee</span>
+    <h2 id="ideeTitel" class="sans" style="font-size:20px;margin:8px 0 0;letter-spacing:-.02em;">Was soll entstehen?</h2>
+    <textarea id="idee" maxlength="4000" placeholder="Zum Beispiel: Coaching für Gründerinnen, die ihre erste Angebotsseite live bringen wollen."></textarea>
+    <div class="actions"><span class="hint">BYB speichert den Lauf in deinem Auftrag. Fehlende Verbindungen bleiben leer — es wird nichts vorgetäuscht.</span><button class="button" id="startButton" type="button" disabled>Angebot erzeugen</button></div>
+    <div class="status" id="laufStatus" role="status" aria-live="polite" hidden></div>
+    <div class="work" id="laufArbeit" hidden>
+      <p data-step="idee">Idee aufnehmen</p>
+      <p data-step="landing">Landing-Vorschau erstellen</p>
+      <p data-step="lead">Anfragen-Aufnahme einrichten</p>
+      <p data-step="agent">Agent starten</p>
+    </div>
+  </section>
+
+  <section class="result" id="ergebnis" aria-live="polite">
+    <div class="empty"><strong>Noch kein Angebot.</strong>Beschreibe oben die Idee. Erst ein tatsächlich gespeicherter Lauf erscheint hier.</div>
+  </section>
+</main>
+<footer><div class="wrap footer"><span>© ClarityCompassAi · BYB</span><nav aria-label="Rechtliches"><a href="/impressum.html">Impressum</a><a href="/datenschutz.html">Datenschutz</a><a href="/agb.html">AGB</a><a href="/eula.html">EULA</a></nav></div></footer>
+<script>
+(() => {
+  'use strict';
+  const TOKEN_KEY='byb_access_token';
+  const idee=document.getElementById('idee');
+  const startButton=document.getElementById('startButton');
+  const laufStatus=document.getElementById('laufStatus');
+  const laufArbeit=document.getElementById('laufArbeit');
+  const ergebnis=document.getElementById('ergebnis');
+  const readJson=async(response)=>{try{return await response.json()}catch{return {}}};
+
+  async function authRequest(aktion,method='GET',body){
+    const init={method,credentials:'same-origin',headers:{accept:'application/json'}};
+    if(body!==undefined){init.headers['content-type']='application/json';init.body=JSON.stringify(body)}
+    return fetch('/api/auth?aktion='+encodeURIComponent(aktion),init);
+  }
+
+  async function tokenAktualisieren(){
+    const response=await authRequest('token');
+    if(!response.ok){localStorage.removeItem(TOKEN_KEY);return null}
+    const data=await readJson(response);
+    if(typeof data.token!=='string'||data.token.length<20){localStorage.removeItem(TOKEN_KEY);return null}
+    localStorage.setItem(TOKEN_KEY,data.token);return data.token;
+  }
+
+  function showStatus(text,error=false){
+    laufStatus.textContent=text;
+    laufStatus.hidden=false;
+    laufStatus.classList.toggle('error',error);
+  }
+
+  function setWork(step){
+    laufArbeit.hidden=false;
+    laufArbeit.querySelectorAll('[data-step]').forEach((node)=>{
+      if(node.getAttribute('data-step')===step)node.setAttribute('aria-current','step');
+      else node.removeAttribute('aria-current');
+    });
+  }
+
+  function el(tag,className,text){
+    const node=document.createElement(tag);
+    if(className)node.className=className;
+    if(text!==undefined)node.textContent=text;
+    return node;
+  }
+
+  function agentDot(zustand){
+    const node=el('i','dot');
+    if(zustand==='laeuft')node.classList.add('on');
+    else if(zustand==='fehlgeschlagen')node.classList.add('fail');
+    else node.classList.add('wait');
+    return node;
+  }
+
+  function renderLauf(lauf){
+    if(!lauf||typeof lauf!=='object'){
+      ergebnis.replaceChildren(el('div','empty'));
+      ergebnis.firstChild.append(el('strong','','Noch kein Angebot.'),document.createTextNode('Beschreibe oben die Idee.'));
+      return;
+    }
+    const root=document.createElement('div');
+    root.className='result';
+
+    const landing=el('section','panel');
+    landing.append(el('span','caps','Landing'),el('h2','', 'Vorschau'));
+    const landingHinweis=el('p','muted',lauf.landing?.hinweis||'');
+    landing.append(landingHinweis);
+    if(typeof lauf.landing?.html==='string'&&lauf.landing.html.length>0){
+      const frame=document.createElement('iframe');
+      frame.className='preview';
+      frame.title='Landing-Vorschau';
+      frame.setAttribute('sandbox','');
+      frame.srcdoc=lauf.landing.html;
+      landing.append(frame);
+    }else{
+      const empty=el('div','empty');
+      empty.append(el('strong','','Keine Vorschau'),document.createTextNode(lauf.landing?.hinweis||'Landing ist noch nicht verfügbar.'));
+      landing.append(empty);
+    }
+
+    const lead=el('section','panel');
+    lead.append(el('span','caps','Anfragen'),el('h2','','Interessenten aufnehmen'));
+    lead.append(el('p','muted',lauf.lead?.hinweis||''));
+    if(lauf.lead?.aktiv){
+      const form=document.createElement('form');
+      form.className='lead';
+      form.setAttribute('id','leadForm');
+      const nameL=el('label','','Name');nameL.setAttribute('for','leadName');
+      const name=document.createElement('input');name.id='leadName';name.name='name';name.required=true;name.maxLength=120;
+      const mailL=el('label','','E-Mail');mailL.setAttribute('for','leadEmail');
+      const mail=document.createElement('input');mail.id='leadEmail';mail.name='email';mail.type='email';mail.required=true;mail.maxLength=254;
+      const msgL=el('label','','Nachricht');msgL.setAttribute('for','leadNachricht');
+      const msg=document.createElement('textarea');msg.id='leadNachricht';msg.name='nachricht';msg.required=true;msg.maxLength=2000;
+      const submit=el('button','button','Anfrage speichern');submit.type='submit';
+      const note=el('p','muted','Gespeichert: '+(Number(lauf.lead.anzahl)||0));
+      note.id='leadCount';
+      form.append(nameL,name,mailL,mail,msgL,msg,submit,note);
+      form.addEventListener('submit',(event)=>void leadSenden(event,lauf.auftrag_id));
+      lead.append(form);
+    }else{
+      const empty=el('div','empty');
+      empty.append(el('strong','','Aufnahme nicht aktiv'),document.createTextNode(lauf.lead?.hinweis||''));
+      lead.append(empty);
+    }
+
+    const agent=el('section','panel');
+    agent.append(el('span','caps','Agent'),el('h2','','Ein laufender Agent'));
+    const row=el('div','agent');
+    row.append(agentDot(lauf.agent?.zustand),el('p','muted',lauf.agent?.hinweis||''));
+    agent.append(row);
+
+    const credits=el('p','credits','Credits geschätzt: '+String(lauf.credits_geschaetzt||0)+' · verbraucht: '+String(lauf.credits_verbraucht||0));
+    root.append(landing,lead,agent,credits);
+    ergebnis.replaceChildren(root);
+  }
+
+  async function leadSenden(event,auftragId){
+    event.preventDefault();
+    const form=event.currentTarget;
+    const submit=form.querySelector('button[type="submit"]');
+    submit.disabled=true;
+    try{
+      const token=await tokenAktualisieren();
+      if(token===null){location.replace('/login.html');return}
+      const response=await fetch('/api/surface-leads',{method:'POST',headers:{authorization:'Bearer '+token,accept:'application/json','content-type':'application/json'},body:JSON.stringify({auftragId,name:form.name.value.trim(),email:form.email.value.trim(),nachricht:form.nachricht.value.trim()})});
+      const data=await readJson(response);
+      if(!response.ok)throw new Error(data?.fehler||'LEAD');
+      form.reset();
+      const count=document.getElementById('leadCount');
+      if(count){const n=Number((count.textContent||'').replace(/\D/g,''))||0;count.textContent='Gespeichert: '+(n+1)}
+      showStatus('Anfrage gespeichert.');
+    }catch{showStatus('Die Anfrage konnte nicht gespeichert werden. Die Aufnahme ist noch nicht verfügbar.',true)}
+    finally{submit.disabled=false}
+  }
+
+  async function laufStarten(){
+    const text=idee.value.trim();
+    if(text.length<10)return;
+    startButton.disabled=true;setWork('idee');showStatus('BYB nimmt die Idee auf…');
+    try{
+      const token=await tokenAktualisieren();
+      if(token===null){location.replace('/login.html');return}
+      setWork('landing');
+      const response=await fetch('/api/surface',{method:'POST',headers:{authorization:'Bearer '+token,accept:'application/json','content-type':'application/json'},body:JSON.stringify({idee:text})});
+      const data=await readJson(response);
+      if(!response.ok||!data.lauf)throw new Error(data?.fehler||'LAUF');
+      setWork('agent');
+      renderLauf(data.lauf);
+      showStatus('Angebot gespeichert. BYB zeigt nur tatsächliche Zustände.');
+      laufArbeit.hidden=true;
+    }catch{showStatus('Das Angebot konnte nicht erzeugt werden. Modellzugang oder Backend ist noch nicht verfügbar.',true)}
+    finally{startButton.disabled=idee.value.trim().length<10}
+  }
+
+  async function laden(){
+    const token=await tokenAktualisieren();
+    if(token===null){location.replace('/login.html');return}
+    const headers={authorization:'Bearer '+token,accept:'application/json'};
+    const response=await fetch('/api/surface',{headers});
+    const data=await readJson(response);
+    if(data?.lauf)renderLauf(data.lauf);
+  }
+
+  idee.addEventListener('input',()=>{startButton.disabled=idee.value.trim().length<10});
+  startButton.addEventListener('click',()=>void laufStarten());
+  void laden();
+})();
+</script>
+</body>
+</html>
