@@ -1,6 +1,6 @@
 # STATUS.md — Stand und offene Fragen
 
-Stand: **M1.7 ist als `14c44e5` auf `main`. M1.8 legt Surface v1 als dünne Idee-zu-Angebot-Seite über die bestehende Control Plane; der öffentliche Livegang bleibt blockiert.**
+Stand: **M1.8 Surface v1 liegt auf `main` (`91ce0fe`). Der Produktcheck Idee → Landing → Lead ist hinter Login gesperrt, bis `BYB_ALLOW_UNPAID_SURFACE=1` auf Vercel gesetzt ist.**
 
 - M0.5 / PR #7: `main` (`234dbe33`)
 - M0.6 / PR #8: `main` (`8776c66d`)
@@ -16,7 +16,8 @@ Stand: **M1.7 ist als `14c44e5` auf `main`. M1.8 legt Surface v1 als dünne Idee
 - Post-Merge-Status / PR #18: `main` (`3f3dc071`)
 - M1.6 / PR #19: `main` (`b80ff240`)
 - M1.7 / PR #20: `main` (`14c44e5`)
-- M1.8 / PR (dieser Branch): Surface v1
+- M1.8 / PR #22: `main` (`91ce0fe`)
+- Unbezahlter Surface-Produktcheck / PR (dieser Branch): `BYB_ALLOW_UNPAID_SURFACE`
 
 ## Produktkern
 
@@ -32,9 +33,13 @@ Eine ruhige Seite `/surface.html`: Idee eingeben, danach Landing-Vorschau, Anfra
 
 Schritte rufen vorhandene Endpunkte nur, wenn die Umgebung sie setzt (`STUDIO_BASE_URL`, `ZEUS_BASE_URL`/`AGENT_BASE_URL`, `SCP_BASE_URL`/`ODIN_SCP_URL`). Fehlt die Umgebung, bleibt der Zustand leer und ehrlich. Es gibt keinen lokalen Prüfer und keinen erfundenen Verbrauch.
 
-Landing-Texte kommen aus dem schnellen Modell, falls der Schlüssel da ist, sonst aus der Idee selbst. Anfragen liegen in `surface_leads` (Migration `006_surface.sql`, RLS, noch nicht produktiv angewendet).
+Landing-Texte kommen aus dem schnellen Modell, falls der Schlüssel da ist, sonst aus der Idee selbst. Anfragen liegen in `surface_leads` (Migration `006_surface.sql`, RLS, auf `damp-dream-67070160/production` angewendet).
 
-Offen: produktive Anwendung von Migration 006, echte Agenten-/Angebots-Laufzeit und Verbrauchsmeldung.
+Ohne Flag bleibt `/surface.html` hinter Neon Auth. Mit `BYB_ALLOW_UNPAID_SURFACE=1` darf Surface ohne Login gelesen und beschrieben werden: fehlendes Bearer wird zur synthetischen Kennung `byb-unpaid-surface`, die weiter durch `mitNutzerTransaktion` und `auth.nutzer_kennung()` läuft. RLS bleibt erzwungen, es gibt keinen Owner-Bypass. Unbezahlte Besucher teilen diesen einen Mandanten. Der Leitstand `/app.html` und `/api/auftraege` bleiben hinter dem Login.
+
+**Tung:** nach dem Merge `BYB_ALLOW_UNPAID_SURFACE=1` auf Vercel setzen.
+
+Offen: Flag auf Vercel setzen, danach Owner-Produktcheck; echte Agenten-/Angebots-Laufzeit und Verbrauchsmeldung.
 
 ## M1.6 — echte Produktoberfläche
 
@@ -106,7 +111,7 @@ Bis diese Punkte geschlossen sind, bedeutet ein gespeicherter Plan ausdrücklich
 ### Neon
 
 - Projekt `damp-dream-67070160`, Branch `production`
-- Migrationen 002–005 produktiv angewendet
+- Migrationen 002–006 produktiv angewendet
 - Control Plane, Connector-Persistenz und Billing-/Credit-Ledger vorhanden
 - Rollen `byb_app`, `byb_worker`, `byb_billing` getrennt
 - FORCE RLS auf den geprüften mandantenbezogenen BYB-Tabellen
@@ -142,7 +147,7 @@ Nicht bekannte Register-, Steuer-, Aufsichts- oder Unternehmensform-Angaben werd
 
 ## Nächste Schritte bis „Owner kann alles prüfen“
 
-1. Surface-v1-PR mergen, danach Migration 006 nur mit ausdrücklicher Freigabe anwenden.
+1. `BYB_ALLOW_UNPAID_SURFACE=1` auf Vercel setzen, danach Idee → Landing → Lead ohne Login prüfen. Flag wieder entfernen, sobald der Check durch ist.
 2. Connector-Auth-Grundlage mit sicherer Secret-Ablage und echtem Resource Picker bauen; GitHub zuerst.
 3. Unterstützten Social Login sauber abschließen; mindestens GitHub zusätzlich zu E-Mail/Passwort, sofern die nötige BYB-OAuth-App produktiv konfiguriert werden kann.
 4. Cloud-Worker an die persistenten Aufträge hängen und GitHub-Ausführung aus dem Chathub nachweisen.
