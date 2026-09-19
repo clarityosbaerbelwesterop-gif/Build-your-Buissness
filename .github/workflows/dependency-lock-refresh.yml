@@ -18,11 +18,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - name: Refresh lockfile and apply non-breaking audit fixes
+      - name: Rebuild lockfile from patched dependency constraints
+        shell: bash
         run: |
+          set -euo pipefail
+          npm install --global npm@11.6.0
+          rm -f package-lock.json
           npm install --package-lock-only --ignore-scripts
-          npm audit fix --package-lock-only --ignore-scripts
           npm audit --audit-level=high
       - name: Commit refreshed lockfile
         shell: bash
