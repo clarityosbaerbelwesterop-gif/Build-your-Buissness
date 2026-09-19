@@ -27,10 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Validate deployment authority
         shell: bash
         run: |
@@ -41,32 +37,68 @@ jobs:
           fi
           echo "Vercel deployment authority configured."
 
-      - name: Link verified BYB project
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm install --global vercel@59.23.1
-          mkdir -p .vercel
-          jq -n --arg projectId "$VERCEL_PROJECT_ID" --arg orgId "$VERCEL_ORG_ID"             '{projectId:$projectId,orgId:$orgId}' > .vercel/project.json
-
       - name: Enable unpaid Surface on production
         shell: bash
         run: |
           set -euo pipefail
-          printf '1' | vercel env add BYB_ALLOW_UNPAID_SURFACE production --yes --force
-          echo "BYB_ALLOW_UNPAID_SURFACE enabled for the pre-Stripe product check."
+          payload="$(jq -cn '{key:"BYB_ALLOW_UNPAID_SURFACE",value:"1",type:"plain",target:["production"],comment:"Pre-Stripe unpaid Surface product check"}')"
+          code="$(curl --silent --show-error --output /tmp/vercel-env.json --write-out '%{http_code}'             --request POST             --url "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?upsert=true&teamId=$VERCEL_ORG_ID"             --header "Authorization: Bearer $VERCEL_TOKEN"             --header "Content-Type: application/json"             --data "$payload")"
+          case "$code" in
+            200|201) echo "BYB_ALLOW_UNPAID_SURFACE enabled for production." ;;
+            *)
+              echo "Vercel environment update failed (HTTP $code)."
+              jq -r '.error.code // .error.message // "unknown"' /tmp/vercel-env.json 2>/dev/null || true
+              exit 1
+              ;;
+          esac
 
-      - name: Build and deploy production
+      - name: Trigger production deployment from main
         shell: bash
         run: |
           set -euo pipefail
-          vercel pull --yes --environment=production
-          vercel build --prod --yes
-          deployed_url="$(vercel deploy --prebuilt --prod --yes)"
-          echo "Production deployment: $deployed_url"
-          echo "### BYB pre-Stripe deployment" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Canonical: $BYB_URL/surface.html" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Deployment: $deployed_url" >> "$GITHUB_STEP_SUMMARY"
+          payload="$(jq -cn             --arg name "byb-prestripe-${GITHUB_RUN_ID}"             --arg project "$VERCEL_PROJECT_ID"             --arg ref "$GITHUB_SHA"             '{name:$name,project:$project,target:"production",gitSource:{type:"github",ref:$ref,repoId:"1341551962"}}')"
+          code="$(curl --silent --show-error --output /tmp/vercel-deploy.json --write-out '%{http_code}'             --request POST             --url "https://api.vercel.com/v13/deployments?teamId=$VERCEL_ORG_ID"             --header "Authorization: Bearer $VERCEL_TOKEN"             --header "Content-Type: application/json"             --data "$payload")"
+          case "$code" in
+            200|201) ;;
+            *)
+              echo "Vercel production deployment creation failed (HTTP $code)."
+              jq -r '.error.code // .error.message // "unknown"' /tmp/vercel-deploy.json 2>/dev/null || true
+              exit 1
+              ;;
+          esac
+          deployment_id="$(jq -r '.id // empty' /tmp/vercel-deploy.json)"
+          if [ -z "$deployment_id" ]; then
+            echo "Vercel did not return a deployment id."
+            exit 1
+          fi
+          echo "deployment_id=$deployment_id" >> "$GITHUB_ENV"
+
+      - name: Wait for production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            curl --fail --silent --show-error               --header "Authorization: Bearer $VERCEL_TOKEN"               "https://api.vercel.com/v13/deployments/$deployment_id?teamId=$VERCEL_ORG_ID"               > /tmp/vercel-status.json
+            state="$(jq -r '.readyState // .status // empty' /tmp/vercel-status.json)"
+            url="$(jq -r '.url // empty' /tmp/vercel-status.json)"
+            if [ "$state" = "READY" ]; then
+              echo "Production READY: https://$url"
+              {
+                echo "### BYB pre-Stripe deployment"
+                echo "- Canonical: $BYB_URL/surface.html"
+                echo "- Deployment: https://$url"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ "$state" = "ERROR" ] || [ "$state" = "CANCELED" ]; then
+              echo "Vercel deployment ended with $state."
+              exit 1
+            fi
+            echo "Deployment not ready yet ($state, attempt $attempt/30)."
+            sleep 5
+          done
+          echo "Vercel production deployment did not become READY."
+          exit 1
 
       - name: Wait for anonymous Surface API
         shell: bash
