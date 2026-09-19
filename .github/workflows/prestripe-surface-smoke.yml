@@ -1,0 +1,134 @@
+name: BYB Pre-Stripe Unpaid Surface Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/prestripe-surface-smoke.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: byb-prestripe-unpaid-surface
+  cancel-in-progress: false
+
+jobs:
+  deploy-and-smoke:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_5KyyWAPW9vLU4EiaKaYZuhaG
+      VERCEL_PROJECT_ID: prj_VB7ToSJE6spWofEKZRjVyC0d6rOL
+      BYB_URL: https://build-your-buissness.vercel.app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate deployment authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "VERCEL_TOKEN is missing"
+            exit 1
+          fi
+          echo "Vercel deployment authority configured."
+
+      - name: Link verified BYB project
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global vercel@59.23.1
+          mkdir -p .vercel
+          jq -n --arg projectId "$VERCEL_PROJECT_ID" --arg orgId "$VERCEL_ORG_ID"             '{projectId:$projectId,orgId:$orgId}' > .vercel/project.json
+
+      - name: Enable unpaid Surface on production
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '1' | vercel env add BYB_ALLOW_UNPAID_SURFACE production --yes --force
+          echo "BYB_ALLOW_UNPAID_SURFACE enabled for the pre-Stripe product check."
+
+      - name: Build and deploy production
+        shell: bash
+        run: |
+          set -euo pipefail
+          vercel pull --yes --environment=production
+          vercel build --prod --yes
+          deployed_url="$(vercel deploy --prebuilt --prod --yes)"
+          echo "Production deployment: $deployed_url"
+          echo "### BYB pre-Stripe deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Canonical: $BYB_URL/surface.html" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Deployment: $deployed_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for anonymous Surface API
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            code="$(curl --silent --show-error --max-time 20               --output /tmp/surface-get.json --write-out '%{http_code}'               "$BYB_URL/api/surface" || true)"
+            if [ "$code" = "200" ]; then
+              echo "Anonymous GET /api/surface passed."
+              exit 0
+            fi
+            echo "Surface not ready yet (HTTP $code, attempt $attempt/24)."
+            sleep 5
+          done
+          cat /tmp/surface-get.json 2>/dev/null || true
+          exit 1
+
+      - name: Smoke idea to lead without login
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          idea_payload="$(jq -cn '{idee:"Pre-Stripe Smoke: Beratungsangebot fuer kleine Unternehmen mit klarer Landingpage und Lead-Capture."}')"
+          create_code="$(curl --silent --show-error --max-time 30             --output /tmp/surface-create.json --write-out '%{http_code}'             -X POST "$BYB_URL/api/surface"             -H 'content-type: application/json'             -H 'accept: application/json'             --data "$idea_payload")"
+          case "$create_code" in
+            2??) ;;
+            *)
+              echo "Anonymous POST /api/surface failed (HTTP $create_code)."
+              cat /tmp/surface-create.json
+              exit 1
+              ;;
+          esac
+
+          auftrag_id="$(jq -r '.lauf.auftrag_id // empty' /tmp/surface-create.json)"
+          if [ -z "$auftrag_id" ]; then
+            echo "Surface response did not return lauf.auftrag_id."
+            cat /tmp/surface-create.json
+            exit 1
+          fi
+
+          lead_payload="$(jq -cn --arg id "$auftrag_id"             '{auftragId:$id,name:"Pre-Stripe Smoke",email:"prestripe-smoke@example.invalid",nachricht:"Automatischer Pre-Stripe Lead-Smoke. Kein echter Kunde."}')"
+          lead_code="$(curl --silent --show-error --max-time 30             --output /tmp/surface-lead.json --write-out '%{http_code}'             -X POST "$BYB_URL/api/surface-leads"             -H 'content-type: application/json'             -H 'accept: application/json'             --data "$lead_payload")"
+          case "$lead_code" in
+            2??) echo "Anonymous POST /api/surface-leads passed." ;;
+            *)
+              echo "Anonymous POST /api/surface-leads failed (HTTP $lead_code)."
+              cat /tmp/surface-lead.json
+              exit 1
+              ;;
+          esac
+
+          protected_code="$(curl --silent --show-error --max-time 20             --output /tmp/auftraege.json --write-out '%{http_code}'             "$BYB_URL/api/auftraege" || true)"
+          if [ "$protected_code" != "401" ]; then
+            echo "Protected /api/auftraege must stay 401 without auth; got HTTP $protected_code."
+            cat /tmp/auftraege.json
+            exit 1
+          fi
+
+          echo "BYB pre-Stripe smoke PASS: idea -> stored Surface -> stored lead; protected app API remains closed."
+          {
+            echo "- Anonymous Surface GET: PASS"
+            echo "- Anonymous idea POST: PASS"
+            echo "- Anonymous lead POST: PASS"
+            echo "- Protected /api/auftraege without token: 401 PASS"
+          } >> "$GITHUB_STEP_SUMMARY"
