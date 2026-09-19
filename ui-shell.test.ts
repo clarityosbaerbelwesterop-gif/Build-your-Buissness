@@ -73,4 +73,14 @@ describe("BYB Produktoberfläche", () => {
     expect(app).toContain('href="/surface.html"');
     expect(landing).toContain('href="/surface.html"');
   });
+
+  it("leitet Surface nur nach 401 zur Anmeldung, den Leitstand weiter ohne Token", () => {
+    const surface = lesen("surface.html");
+    const app = lesen("app.html");
+
+    expect(surface).not.toContain("if(token===null){location.replace('/login.html')");
+    expect(surface).toContain("if(response.status===401){location.replace('/login.html')");
+    expect(app).toContain("if(token===null){location.replace('/login.html')");
+  });
 });
+

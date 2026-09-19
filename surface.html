@@ -169,6 +169,18 @@
     ergebnis.replaceChildren(root);
   }
 
+  function apiHeaders(token,json){
+    const headers={accept:'application/json'};
+    if(token)headers.authorization='Bearer '+token;
+    if(json)headers['content-type']='application/json';
+    return headers;
+  }
+
+  function loginWennGesperrt(response){
+    if(response.status===401){location.replace('/login.html');return true}
+    return false;
+  }
+
   async function leadSenden(event,auftragId){
     event.preventDefault();
     const form=event.currentTarget;
@@ -176,8 +188,8 @@
     submit.disabled=true;
     try{
       const token=await tokenAktualisieren();
-      if(token===null){location.replace('/login.html');return}
-      const response=await fetch('/api/surface-leads',{method:'POST',headers:{authorization:'Bearer '+token,accept:'application/json','content-type':'application/json'},body:JSON.stringify({auftragId,name:form.name.value.trim(),email:form.email.value.trim(),nachricht:form.nachricht.value.trim()})});
+      const response=await fetch('/api/surface-leads',{method:'POST',headers:apiHeaders(token,true),body:JSON.stringify({auftragId,name:form.name.value.trim(),email:form.email.value.trim(),nachricht:form.nachricht.value.trim()})});
+      if(loginWennGesperrt(response))return;
       const data=await readJson(response);
       if(!response.ok)throw new Error(data?.fehler||'LEAD');
       form.reset();
@@ -194,9 +206,9 @@
     startButton.disabled=true;setWork('idee');showStatus('BYB nimmt die Idee auf…');
     try{
       const token=await tokenAktualisieren();
-      if(token===null){location.replace('/login.html');return}
       setWork('landing');
-      const response=await fetch('/api/surface',{method:'POST',headers:{authorization:'Bearer '+token,accept:'application/json','content-type':'application/json'},body:JSON.stringify({idee:text})});
+      const response=await fetch('/api/surface',{method:'POST',headers:apiHeaders(token,true),body:JSON.stringify({idee:text})});
+      if(loginWennGesperrt(response))return;
       const data=await readJson(response);
       if(!response.ok||!data.lauf)throw new Error(data?.fehler||'LAUF');
       setWork('agent');
@@ -209,9 +221,8 @@
 
   async function laden(){
     const token=await tokenAktualisieren();
-    if(token===null){location.replace('/login.html');return}
-    const headers={authorization:'Bearer '+token,accept:'application/json'};
-    const response=await fetch('/api/surface',{headers});
+    const response=await fetch('/api/surface',{headers:apiHeaders(token,false)});
+    if(loginWennGesperrt(response))return;
     const data=await readJson(response);
     if(data?.lauf)renderLauf(data.lauf);
   }

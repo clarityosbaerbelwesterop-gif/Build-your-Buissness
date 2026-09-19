@@ -3,9 +3,9 @@ import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { z } from "zod";
 
-import { bearerTokenAus, neonJwtKonfigurationAusUmgebung, neonJwtPruefer } from "../auth/neon-jwt.js";
 import { zugang } from "../config/zugaenge.js";
 import type { SqlVerbindung, VerifizierteIdentitaet } from "../db/auth-kontext.js";
+import { surfaceIdentitaetAus } from "../surface/identitaet.js";
 import { surfaceLeadSpeichern } from "../surface/speicher.js";
 
 const NeueAnfrage = z
@@ -22,8 +22,7 @@ function json(daten: unknown, status = 200): Response {
 }
 
 async function identitaetAus(request: Request): Promise<VerifizierteIdentitaet> {
-  const token = bearerTokenAus(request.headers.get("authorization") ?? undefined);
-  return neonJwtPruefer(neonJwtKonfigurationAusUmgebung())(token);
+  return surfaceIdentitaetAus(request);
 }
 
 async function mitDatenbank<T>(arbeit: (db: SqlVerbindung) => Promise<T>): Promise<T> {
